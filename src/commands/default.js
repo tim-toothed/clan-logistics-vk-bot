@@ -1,9 +1,11 @@
-export async function handleDefaultMessage({ event, vk }) {
+export async function handleDefaultMessage(env, payload, state, vk) {
+  const peerId = payload?.object?.message?.peer_id;
+  const text = payload?.object?.message?.text?.trim?.() ?? "";
   const message = [
-    "Шаблон уже задеплоен и принимает сообщения из VK.",
-    "Попробуй команды start или help.",
-    event.text ? `Получил сообщение: ${event.text}` : "Поле text пока пустое.",
+    "Shablon uzhe zadeploen i prinimaet soobshcheniia iz VK.",
+    "Poprobui komandy start ili help.",
+    text ? `Poluchil soobshchenie: ${text}` : "Pole text poka pustoe.",
   ].join("\n");
 
-  await vk.sendText(event.peerId, message);
+  await vk.sendText(peerId, message);
 }

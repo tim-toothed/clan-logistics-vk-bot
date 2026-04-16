@@ -1,83 +1,150 @@
-import { dispatchVkCommand } from "./CommandMap.js";
-import { createVkClient } from "./vk-api.js";
+import commandMap from "./CommandMap.js";
+import { createVkClient } from "./utils/vk-api.js";
 
-export async function handleVkRequest({ request, env, ctx }) {
-  if (request.method === "GET") {
-    return new Response("VK bot worker is alive", { status: 200 });
-  }
+const state = {
+  pendingMessages: {},
+};
 
-  if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
+const eventTypeHandlers = {
+  message_new: "handleTextMessage",
+  message_event: "handleMessageEvent",
+  message_reply: "handleMessageReply",
+  message_allow: "handleMessageAllow",
+  message_deny: "handleMessageDeny",
+};
 
-  let update;
-
-  try {
-    update = await request.json();
-  } catch (error) {
-    console.error("Failed to parse VK callback payload", error);
-    return new Response("Bad request", { status: 400 });
-  }
-
-  console.log("Received VK callback", {
-    type: update?.type ?? null,
-    groupId: update?.group_id ?? null,
-    hasSecret: typeof update?.secret === "string" && update.secret.length > 0,
-  });
-
-  return handleVkCallback({ update, env, ctx });
-}
-
-export async function handleVkCallback({ update, env, ctx }) {
-  if (update?.type === "confirmation") {
-    if (!env.VK_CONFIRMATION_TOKEN) {
-      console.error("VK_CONFIRMATION_TOKEN is missing");
-      return new Response("Missing confirmation token", { status: 500 });
+export default {
+  async fetch(request, env, ctx) {
+    if (request.method === "GET") {
+      return new Response("VK bot worker is alive", { status: 200 });
     }
 
-    console.log("Returning VK confirmation token");
-    return new Response(env.VK_CONFIRMATION_TOKEN, { status: 200 });
-  }
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
 
-  if (!isVkSecretValid(update, env)) {
-    console.warn("Rejected VK callback because secret did not match", {
-      type: update?.type ?? null,
-      hasConfiguredSecret: Boolean(env.VK_SECRET),
-      hasIncomingSecret: typeof update?.secret === "string" && update.secret.length > 0,
+    let payload;
+
+    try {
+      payload = await request.json();
+    } catch (error) {
+      console.error("Failed to parse VK callback payload", error);
+      return new Response("Bad request", { status: 400 });
+    }
+
+    console.log("Received VK callback", {
+      type: payload?.type ?? null,
+      groupId: payload?.group_id ?? null,
+      hasSecret: typeof payload?.secret === "string" && payload.secret.length > 0,
     });
-    return new Response("Forbidden", { status: 403 });
-  }
 
-  if (update?.type !== "message_new") {
-    console.log("Ignoring unsupported VK event type", {
-      type: update?.type ?? null,
-    });
+    if (payload?.type === "confirmation") {
+      if (!env.VK_CONFIRMATION_TOKEN) {
+        console.error("VK_CONFIRMATION_TOKEN is missing");
+        return new Response("Missing confirmation token", { status: 500 });
+      }
+
+      console.log("Returning VK confirmation token");
+      return new Response(env.VK_CONFIRMATION_TOKEN, { status: 200 });
+    }
+
+    if (!isVkSecretValid(payload, env)) {
+      console.warn("Rejected VK callback because secret did not match", {
+        type: payload?.type ?? null,
+        hasConfiguredSecret: Boolean(env.VK_SECRET),
+        hasIncomingSecret: typeof payload?.secret === "string" && payload.secret.length > 0,
+      });
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    const vk = createVkClient(env);
+    const eventType = payload?.type ?? "";
+    const handlerMethod = eventTypeHandlers[eventType];
+
+    if (handlerMethod) {
+      const handler = commandMap[eventType];
+
+      if (handler && typeof handler[handlerMethod] === "function") {
+        ctx.waitUntil(
+          Promise.resolve(handler[handlerMethod](env, payload, state, vk, ctx)).catch((error) => {
+            console.error(`Failed to process VK ${eventType} event`, error, payload);
+          }),
+        );
+      }
+    } else {
+      console.log("Ignoring unsupported VK event type", {
+        type: eventType || null,
+      });
+    }
+
+    if (eventType === "message_new") {
+      ctx.waitUntil(
+        handleTextCommands(env, payload, state, vk, ctx).catch((error) => {
+          console.error("Failed to process VK text command", error, payload);
+        }),
+      );
+    }
+
     return new Response("ok", { status: 200 });
+  },
+
+  async scheduled(event, env, ctx) {
+    const handler = commandMap.cron;
+
+    if (!handler || typeof handler.handleCron !== "function") {
+      return;
+    }
+
+    const vk = createVkClient(env);
+    await handler.handleCron(env, event, state, vk, ctx);
+  },
+};
+
+async function handleTextCommands(env, payload, state, vk, ctx) {
+  const text = getMessageText(payload);
+  const peerId = payload?.object?.message?.peer_id;
+  const fromId = payload?.object?.message?.from_id;
+
+  if (!peerId || !fromId) {
+    console.warn("VK message_new callback did not contain peer_id or from_id");
+    return;
   }
 
-  const event = normalizeMessageNew(update);
+  const input = text.toLowerCase();
+  const pendingCommand = state.pendingMessages[`${fromId}-${peerId}`];
 
-  if (!event) {
-    console.warn("VK message_new callback did not contain object.message");
-    return new Response("ok", { status: 200 });
+  if (pendingCommand) {
+    const pendingHandler = commandMap[pendingCommand.command];
+
+    if (pendingHandler && typeof pendingHandler.handlePendingMessage === "function") {
+      await pendingHandler.handlePendingMessage(env, payload, state, vk, ctx);
+      return;
+    }
   }
 
-  console.log("Dispatching VK message", {
-    peerId: event.peerId ?? null,
-    fromId: event.fromId ?? null,
-    rawCommand: event.rawCommand ?? "",
-    hasText: Boolean(event.text),
-  });
+  const command = findCommand(input);
 
-  const vk = createVkClient(env);
+  if (command) {
+    const commandHandler = commandMap[command];
 
-  ctx.waitUntil(
-    dispatchVkCommand({ event, vk, env }).catch((error) => {
-      console.error("Failed to process VK message_new event", error, update);
-    }),
-  );
+    if (commandHandler && typeof commandHandler.handleCommand === "function") {
+      console.log("Dispatching VK command", { command });
+      await commandHandler.handleCommand(env, payload, state, vk, ctx);
+      return;
+    }
 
-  return new Response("ok", { status: 200 });
+    if (typeof commandHandler === "function") {
+      console.log("Dispatching VK command", { command });
+      await commandHandler(env, payload, state, vk, ctx);
+      return;
+    }
+  }
+
+  const defaultHandler = commandMap.default;
+
+  if (defaultHandler && typeof defaultHandler.handleTextMessage === "function") {
+    await defaultHandler.handleTextMessage(env, payload, state, vk, ctx);
+  }
 }
 
 function isVkSecretValid(update, env) {
@@ -88,47 +155,30 @@ function isVkSecretValid(update, env) {
   return update?.secret === env.VK_SECRET;
 }
 
-function normalizeMessageNew(update) {
-  const message = update?.object?.message;
-
-  if (!message) {
-    return null;
-  }
-
-  const text = typeof message.text === "string" ? message.text.trim() : "";
-
-  return {
-    type: update.type,
-    text,
-    rawCommand: extractCommand(text),
-    payload: safeJsonParse(message.payload),
-    peerId: message.peer_id,
-    fromId: message.from_id,
-    conversationMessageId: message.conversation_message_id,
-    message,
-    update,
-  };
+function getMessageText(payload) {
+  const text = payload?.object?.message?.text;
+  return typeof text === "string" ? text.trim() : "";
 }
 
-function extractCommand(text) {
-  if (!text) {
+function findCommand(input) {
+  if (!input) {
     return "";
   }
 
-  const normalized = text.toLowerCase().trim();
-  const value = normalized.startsWith("/") ? normalized.slice(1) : normalized;
+  const commandKeys = Object.keys(commandMap).filter((key) => {
+    return !eventTypeHandlers[key] && key !== "default" && key !== "cron";
+  });
 
-  return value.split(/\s+/u)[0] ?? "";
+  const normalizedInput = normalizeCommandInput(input);
+
+  return (
+    commandKeys.find((command) => {
+      return normalizedInput.startsWith(normalizeCommandInput(command));
+    }) ?? ""
+  );
 }
 
-function safeJsonParse(value) {
-  if (typeof value !== "string" || value === "") {
-    return null;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
+function normalizeCommandInput(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized.startsWith("/") ? normalized.slice(1) : normalized;
 }

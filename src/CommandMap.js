@@ -3,14 +3,15 @@ import { handleHelpCommand } from "./commands/help.js";
 import { handleStartCommand } from "./commands/start.js";
 
 const commandMap = {
-  help: handleHelpCommand,
-  start: handleStartCommand,
+  start: {
+    handleCommand: handleStartCommand,
+  },
+  help: {
+    handleCommand: handleHelpCommand,
+  },
+  default: {
+    handleTextMessage: handleDefaultMessage,
+  },
 };
 
-export async function dispatchVkCommand({ event, vk, env }) {
-  const commandHandler = commandMap[event.rawCommand] ?? handleDefaultMessage;
-
-  await commandHandler({ event, vk, env });
-}
-
-export { commandMap };
+export default commandMap;

@@ -1,9 +1,10 @@
-export async function handleStartCommand({ event, vk }) {
+export async function handleStartCommand(env, payload, state, vk) {
+  const peerId = payload?.object?.message?.peer_id;
   const message = [
-    "Привет. Это минимальный шаблон VK-бота на Cloudflare Workers.",
-    "Структура уже готова под main.js, CommandMap.js и отдельные команды.",
-    "Напиши help, чтобы увидеть следующий шаг.",
+    "Privet. Eto minimalnyi shablon VK-bota na Cloudflare Workers.",
+    "Struktura uzhe gotova pod universalnyi main.js, CommandMap.js i otdelnye komandy.",
+    "Napishi help, chtoby uvidet sleduyushchii shag.",
   ].join("\n");
 
-  await vk.sendText(event.peerId, message);
+  await vk.sendText(peerId, message);
 }

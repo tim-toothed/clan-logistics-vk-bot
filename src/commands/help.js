@@ -1,11 +1,12 @@
-export async function handleHelpCommand({ event, vk }) {
+export async function handleHelpCommand(env, payload, state, vk) {
+  const peerId = payload?.object?.message?.peer_id;
   const message = [
-    "Сейчас доступны команды:",
-    "start - стартовое сообщение",
-    "help - эта подсказка",
+    "Seichas dostupny komandy:",
+    "start - startovoe soobshchenie",
+    "help - eta podskazka",
     "",
-    "Дальше можно добавлять новые команды в src/commands и регистрировать их в CommandMap.js.",
+    "Dalshe mozhno dobavliat novye komandy v src/commands i registrirovat ikh v CommandMap.js.",
   ].join("\n");
 
-  await vk.sendText(event.peerId, message);
+  await vk.sendText(peerId, message);
 }

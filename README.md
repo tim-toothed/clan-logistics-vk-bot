@@ -2,10 +2,10 @@
 
 Minimal Cloudflare Worker template for a VK community bot with a Telegram-like structure:
 
-- `src/main.js` accepts and normalizes VK callbacks
-- `src/CommandMap.js` routes commands
+- `src/main.js` is the Worker entrypoint and universal event dispatcher
+- `src/CommandMap.js` stores command and event bindings
 - `src/commands/*` contains business logic handlers
-- `src/vk-api.js` wraps VK API calls
+- `src/utils/*` stores internal helpers such as VK API and future DB helpers
 
 ## Local setup
 

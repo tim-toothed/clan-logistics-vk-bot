@@ -19,6 +19,12 @@ export async function handleVkRequest({ request, env, ctx }) {
     return new Response("Bad request", { status: 400 });
   }
 
+  console.log("Received VK callback", {
+    type: update?.type ?? null,
+    groupId: update?.group_id ?? null,
+    hasSecret: typeof update?.secret === "string" && update.secret.length > 0,
+  });
+
   return handleVkCallback({ update, env, ctx });
 }
 
@@ -29,22 +35,39 @@ export async function handleVkCallback({ update, env, ctx }) {
       return new Response("Missing confirmation token", { status: 500 });
     }
 
+    console.log("Returning VK confirmation token");
     return new Response(env.VK_CONFIRMATION_TOKEN, { status: 200 });
   }
 
   if (!isVkSecretValid(update, env)) {
+    console.warn("Rejected VK callback because secret did not match", {
+      type: update?.type ?? null,
+      hasConfiguredSecret: Boolean(env.VK_SECRET),
+      hasIncomingSecret: typeof update?.secret === "string" && update.secret.length > 0,
+    });
     return new Response("Forbidden", { status: 403 });
   }
 
   if (update?.type !== "message_new") {
+    console.log("Ignoring unsupported VK event type", {
+      type: update?.type ?? null,
+    });
     return new Response("ok", { status: 200 });
   }
 
   const event = normalizeMessageNew(update);
 
   if (!event) {
+    console.warn("VK message_new callback did not contain object.message");
     return new Response("ok", { status: 200 });
   }
+
+  console.log("Dispatching VK message", {
+    peerId: event.peerId ?? null,
+    fromId: event.fromId ?? null,
+    rawCommand: event.rawCommand ?? "",
+    hasText: Boolean(event.text),
+  });
 
   const vk = createVkClient(env);
 

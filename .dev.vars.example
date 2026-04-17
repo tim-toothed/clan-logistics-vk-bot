@@ -1,3 +1,4 @@
 VK_GROUP_TOKEN=put-your-community-token-here
-VK_CONFIRMATION_TOKEN=put-your-confirmation-code-here
+VK_CONFIRMATION_TOKEN=put-your-confirmation-token-here
 VK_SECRET=put-your-callback-secret-here
+ADMIN_PASSWORD=put-your-admin-password-here

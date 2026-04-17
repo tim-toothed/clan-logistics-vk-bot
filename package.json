@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/main.js && node --check src/CommandMap.js && node --check src/utils/vk-api.js"
+    "check": "node --check src/main.js && node --check src/CommandMap.js && node --check src/utils/vk-api.js && node --check src/utils/db.js && node --check src/utils/keyboards.js && node --check src/utils/users.js && node --check src/utils/user-state.js && node --check src/utils/onboarding.js"
   },
   "devDependencies": {
     "wrangler": "^4.13.2"

@@ -1,10 +1,11 @@
 import { ACTIONS } from "../../app/action-types.js";
 import { STATE_TYPES } from "../../app/state-types.js";
 import {
-  buildMessageTriggerOptions,
   deleteMessageById,
   getMessageById,
+  listBaseMessageTriggerOptions,
   listMessagesForMenu,
+  listStationMessageTriggerOptions,
   MESSAGE_TRIGGER_TYPES,
   upsertMessageTemplate,
 } from "../../db/messages-repository.js";
@@ -196,22 +197,21 @@ export async function handleMessageTemplateActionsState(context) {
 async function openMessageTriggerMenu(context, payload) {
   const screenModel = await buildTriggerMenuScreenModel(context.env, payload);
 
-  await sendMessageTriggerSelectScreen(context.vk, context.peerId, screenModel.text, screenModel.buttons);
+  await sendMessageTriggerSelectScreen(context.vk, context.peerId, screenModel.text, screenModel.keyboardModel);
   await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_TRIGGER_MENU, "idle", screenModel.statePayload);
   return true;
 }
 
 async function buildTriggerMenuScreenModel(env, payload) {
-  const options = await buildMessageTriggerOptions(env);
   const normalizedPayload = normalizeTriggerMenuPayload(payload);
 
   if (normalizedPayload.mode === TRIGGER_MENU_MODES.STATION) {
-    const stationOptions = options.filter((option) => option.triggerType === MESSAGE_TRIGGER_TYPES.GO_TO_STATION);
+    const stationOptions = await listStationMessageTriggerOptions(env);
 
     if (!stationOptions.length) {
       return {
         text: "Сначала добавьте станции, и после этого здесь появятся варианты для сообщений перехода.",
-        buttons: [],
+        keyboardModel: { buttons: [] },
         statePayload: { mode: TRIGGER_MENU_MODES.ROOT, page: 0 },
       };
     }
@@ -223,17 +223,16 @@ async function buildTriggerMenuScreenModel(env, payload) {
 
     return {
       text: `Для какой станции нужно сообщение?\nСтраница ${currentPage + 1} из ${maxPage + 1}`,
-      buttons: Object.assign([...pageButtons], {
+      keyboardModel: {
+        buttons: pageButtons,
         previousPage: currentPage > 0 ? currentPage - 1 : null,
         nextPage: currentPage < maxPage ? currentPage + 1 : null,
-      }),
+      },
       statePayload: { mode: TRIGGER_MENU_MODES.STATION, page: currentPage },
     };
   }
 
-  const rootButtons = options
-    .filter((option) => option.triggerType !== MESSAGE_TRIGGER_TYPES.GO_TO_STATION)
-    .map((option) => ({ ...option }));
+  const rootButtons = listBaseMessageTriggerOptions().map((option) => ({ ...option }));
 
   rootButtons.splice(3, 0, {
     label: "Для перехода на станцию",
@@ -243,7 +242,9 @@ async function buildTriggerMenuScreenModel(env, payload) {
 
   return {
     text: "Когда сообщение должно отправляться?",
-    buttons: rootButtons,
+    keyboardModel: {
+      buttons: rootButtons,
+    },
     statePayload: { mode: TRIGGER_MENU_MODES.ROOT, page: 0 },
   };
 }

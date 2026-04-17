@@ -123,9 +123,7 @@ export async function deleteAllMessages(env) {
   await dbRun(env, "DELETE FROM messages");
 }
 
-export async function buildMessageTriggerOptions(env) {
-  const stations = await dbAll(env, "SELECT id, station_name FROM stations ORDER BY id ASC");
-
+export function listBaseMessageTriggerOptions() {
   return [
     {
       triggerType: MESSAGE_TRIGGER_TYPES.BOT_START,
@@ -145,12 +143,6 @@ export async function buildMessageTriggerOptions(env) {
       title: "Сообщение об ожидании",
       label: "Сообщение об ожидании",
     },
-    ...stations.map((station) => ({
-      triggerType: MESSAGE_TRIGGER_TYPES.GO_TO_STATION,
-      stationId: station.id,
-      title: `Для перехода на станцию ${station.station_name}`,
-      label: `Для перехода на станцию ${station.station_name}`,
-    })),
     {
       triggerType: MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL,
       stationId: null,
@@ -158,6 +150,17 @@ export async function buildMessageTriggerOptions(env) {
       label: "После прохождения станций",
     },
   ];
+}
+
+export async function listStationMessageTriggerOptions(env) {
+  const stations = await dbAll(env, "SELECT id, station_name FROM stations ORDER BY id ASC");
+
+  return stations.map((station) => ({
+    triggerType: MESSAGE_TRIGGER_TYPES.GO_TO_STATION,
+    stationId: station.id,
+    title: `Для перехода на станцию ${station.station_name}`,
+    label: `Для перехода на станцию ${station.station_name}`,
+  }));
 }
 
 async function findExistingMessageSlot(env, triggerType, stationId) {

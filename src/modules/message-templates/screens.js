@@ -12,9 +12,9 @@ export async function sendBotMessagesMenuScreen(vk, peerId, messageButtons) {
   });
 }
 
-export async function sendMessageTriggerSelectScreen(vk, peerId, text, triggerButtons) {
+export async function sendMessageTriggerSelectScreen(vk, peerId, text, triggerKeyboardModel) {
   await vk.sendText(peerId, text, {
-    keyboard: createMessageTriggerKeyboard(triggerButtons),
+    keyboard: createMessageTriggerKeyboard(triggerKeyboardModel),
   });
 }
 

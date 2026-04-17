@@ -18,7 +18,8 @@ export function createBotMessagesKeyboard(messageButtons = []) {
   ]);
 }
 
-export function createMessageTriggerKeyboard(triggerButtons = []) {
+export function createMessageTriggerKeyboard(model = {}) {
+  const triggerButtons = Array.isArray(model.buttons) ? model.buttons : [];
   const rows = [
     ...triggerButtons.map((button) => [
       {
@@ -36,19 +37,19 @@ export function createMessageTriggerKeyboard(triggerButtons = []) {
 
   const navigationButtons = [];
 
-  if (Number.isInteger(triggerButtons.previousPage)) {
+  if (Number.isInteger(model.previousPage)) {
     navigationButtons.push({
       label: "← Назад",
       color: "secondary",
-      payload: { action: ACTIONS.MESSAGE_TRIGGER_PAGE, page: triggerButtons.previousPage },
+      payload: { action: ACTIONS.MESSAGE_TRIGGER_PAGE, page: model.previousPage },
     });
   }
 
-  if (Number.isInteger(triggerButtons.nextPage)) {
+  if (Number.isInteger(model.nextPage)) {
     navigationButtons.push({
       label: "Дальше →",
       color: "secondary",
-      payload: { action: ACTIONS.MESSAGE_TRIGGER_PAGE, page: triggerButtons.nextPage },
+      payload: { action: ACTIONS.MESSAGE_TRIGGER_PAGE, page: model.nextPage },
     });
   }
 

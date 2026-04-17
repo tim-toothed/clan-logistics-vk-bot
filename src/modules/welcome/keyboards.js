@@ -13,16 +13,15 @@ export function createParticipantKeyboard() {
 }
 
 export function createParticipantTeamKeyboard(teams = []) {
-  const rows = teams.map((team) => [
-    {
-      label: team.team_name,
-      color: "primary",
-      payload: {
-        action: ACTIONS.PARTICIPANT_TEAM_SELECT,
-        teamId: team.id,
-      },
+  const teamButtons = teams.map((team) => ({
+    label: team.team_name,
+    color: "primary",
+    payload: {
+      action: ACTIONS.PARTICIPANT_TEAM_SELECT,
+      teamId: team.id,
     },
-  ]);
+  }));
+  const rows = chunkButtons(teamButtons, 2);
 
   rows.push([{ label: "Назад", color: "secondary", payload: { action: ACTIONS.BACK_TO_WHO_ARE_YOU } }]);
   return createKeyboard(rows);
@@ -30,10 +29,22 @@ export function createParticipantTeamKeyboard(teams = []) {
 
 export function createAdminStationKeyboard(stations = []) {
   const rows = [[{ label: "Войти как админ", color: "positive" }]];
+  const stationButtons = stations.map((stationName) => ({
+    label: stationName,
+    color: "primary",
+  }));
 
-  for (const stationName of stations) {
-    rows.push([{ label: stationName, color: "primary" }]);
-  }
+  rows.push(...chunkButtons(stationButtons, 2));
 
   return createKeyboard(rows);
+}
+
+function chunkButtons(buttons, columns) {
+  const rows = [];
+
+  for (let index = 0; index < buttons.length; index += columns) {
+    rows.push(buttons.slice(index, index + columns));
+  }
+
+  return rows;
 }

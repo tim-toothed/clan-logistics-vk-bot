@@ -5,6 +5,7 @@ import {
   deleteMessageById,
   getMessageById,
   listMessagesForMenu,
+  MESSAGE_TRIGGER_TYPES,
   upsertMessageTemplate,
 } from "../../db/messages-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
@@ -19,10 +20,16 @@ import {
   sendMessageTriggerSelectScreen,
 } from "./screens.js";
 
+const TRIGGER_MENU_MODES = Object.freeze({
+  ROOT: "root",
+  STATION: "station",
+});
+
+const STATION_TRIGGER_PAGE_SIZE = 6;
+
 export async function openBotMessagesMenu(context) {
   const messages = await listMessagesForMenu(context.env);
 
-  await setUserState(context.env, context.user.id, STATE_TYPES.BOT_MESSAGES_MENU, "idle");
   await sendBotMessagesMenuScreen(
     context.vk,
     context.peerId,
@@ -31,6 +38,7 @@ export async function openBotMessagesMenu(context) {
       label: message.display_title,
     })),
   );
+  await setUserState(context.env, context.user.id, STATE_TYPES.BOT_MESSAGES_MENU, "idle");
   return true;
 }
 
@@ -42,11 +50,7 @@ export async function handleBotMessagesMenuState(context) {
   }
 
   if (context.action === ACTIONS.MESSAGE_CREATE) {
-    const triggerButtons = await buildMessageTriggerOptions(context.env);
-
-    await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_TRIGGER_MENU, "idle");
-    await sendMessageTriggerSelectScreen(context.vk, context.peerId, triggerButtons);
-    return true;
+    return openMessageTriggerMenu(context, { mode: TRIGGER_MENU_MODES.ROOT, page: 0 });
   }
 
   if (context.action === ACTIONS.MESSAGE_OPEN && context.buttonPayload?.messageId) {
@@ -71,23 +75,38 @@ export async function handleBotMessagesMenuState(context) {
 }
 
 export async function handleMessageTriggerMenuState(context) {
+  const menuPayload = normalizeTriggerMenuPayload(context.userState?.payload);
+
   if (context.action === ACTIONS.MESSAGES_MENU_BACK || context.input === "назад") {
+    if (menuPayload.mode === TRIGGER_MENU_MODES.STATION) {
+      return openMessageTriggerMenu(context, { mode: TRIGGER_MENU_MODES.ROOT, page: 0 });
+    }
+
     return openBotMessagesMenu(context);
   }
 
-  if (context.action !== ACTIONS.MESSAGE_TRIGGER_SELECT) {
-    const triggerButtons = await buildMessageTriggerOptions(context.env);
-    await sendMessageTriggerSelectScreen(context.vk, context.peerId, triggerButtons);
-    return true;
+  if (context.action === ACTIONS.MESSAGE_TRIGGER_STATIONS) {
+    return openMessageTriggerMenu(context, { mode: TRIGGER_MENU_MODES.STATION, page: 0 });
   }
 
+  if (context.action === ACTIONS.MESSAGE_TRIGGER_PAGE) {
+    return openMessageTriggerMenu(context, {
+      mode: TRIGGER_MENU_MODES.STATION,
+      page: Number(context.buttonPayload?.page ?? 0),
+    });
+  }
+
+  if (context.action !== ACTIONS.MESSAGE_TRIGGER_SELECT) {
+    return openMessageTriggerMenu(context, menuPayload);
+  }
+
+  await sendMessageRecordingStartScreen(context.vk, context.peerId, context.buttonPayload.title);
   await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_RECORDING, "record", {
     triggerType: context.buttonPayload.triggerType,
     stationId: context.buttonPayload.stationId ?? null,
     title: context.buttonPayload.title,
     items: [],
   });
-  await sendMessageRecordingStartScreen(context.vk, context.peerId, context.buttonPayload.title);
   return true;
 }
 
@@ -160,16 +179,81 @@ export async function handleMessageTemplateActionsState(context) {
       return openBotMessagesMenu(context);
     }
 
+    await sendMessageRecordingStartScreen(context.vk, context.peerId, message.display_title);
     await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_RECORDING, "record", {
       triggerType: message.trigger_type,
       stationId: message.station_id ?? null,
       title: message.title,
       items: [],
     });
-    await sendMessageRecordingStartScreen(context.vk, context.peerId, message.display_title);
     return true;
   }
 
   await sendMessageTemplateActionsScreen(context.vk, context.peerId, messageId);
   return true;
+}
+
+async function openMessageTriggerMenu(context, payload) {
+  const screenModel = await buildTriggerMenuScreenModel(context.env, payload);
+
+  await sendMessageTriggerSelectScreen(context.vk, context.peerId, screenModel.text, screenModel.buttons);
+  await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_TRIGGER_MENU, "idle", screenModel.statePayload);
+  return true;
+}
+
+async function buildTriggerMenuScreenModel(env, payload) {
+  const options = await buildMessageTriggerOptions(env);
+  const normalizedPayload = normalizeTriggerMenuPayload(payload);
+
+  if (normalizedPayload.mode === TRIGGER_MENU_MODES.STATION) {
+    const stationOptions = options.filter((option) => option.triggerType === MESSAGE_TRIGGER_TYPES.GO_TO_STATION);
+
+    if (!stationOptions.length) {
+      return {
+        text: "Сначала добавьте станции, и после этого здесь появятся варианты для сообщений перехода.",
+        buttons: [],
+        statePayload: { mode: TRIGGER_MENU_MODES.ROOT, page: 0 },
+      };
+    }
+
+    const maxPage = Math.max(0, Math.ceil(stationOptions.length / STATION_TRIGGER_PAGE_SIZE) - 1);
+    const currentPage = Math.min(Math.max(0, normalizedPayload.page), maxPage);
+    const pageStart = currentPage * STATION_TRIGGER_PAGE_SIZE;
+    const pageButtons = stationOptions.slice(pageStart, pageStart + STATION_TRIGGER_PAGE_SIZE);
+
+    return {
+      text: `Для какой станции нужно сообщение?\nСтраница ${currentPage + 1} из ${maxPage + 1}`,
+      buttons: Object.assign([...pageButtons], {
+        previousPage: currentPage > 0 ? currentPage - 1 : null,
+        nextPage: currentPage < maxPage ? currentPage + 1 : null,
+      }),
+      statePayload: { mode: TRIGGER_MENU_MODES.STATION, page: currentPage },
+    };
+  }
+
+  const rootButtons = options
+    .filter((option) => option.triggerType !== MESSAGE_TRIGGER_TYPES.GO_TO_STATION)
+    .map((option) => ({ ...option }));
+
+  rootButtons.splice(3, 0, {
+    label: "Для перехода на станцию",
+    color: "primary",
+    payload: { action: ACTIONS.MESSAGE_TRIGGER_STATIONS },
+  });
+
+  return {
+    text: "Когда сообщение должно отправляться?",
+    buttons: rootButtons,
+    statePayload: { mode: TRIGGER_MENU_MODES.ROOT, page: 0 },
+  };
+}
+
+function normalizeTriggerMenuPayload(payload) {
+  const mode = payload?.mode === TRIGGER_MENU_MODES.STATION ? TRIGGER_MENU_MODES.STATION : TRIGGER_MENU_MODES.ROOT;
+  const page = Number.isInteger(payload?.page) ? payload.page : Number(payload?.page ?? 0);
+
+  return {
+    mode,
+    page: Number.isFinite(page) ? Math.max(0, page) : 0,
+  };
 }

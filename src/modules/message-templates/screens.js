@@ -12,8 +12,8 @@ export async function sendBotMessagesMenuScreen(vk, peerId, messageButtons) {
   });
 }
 
-export async function sendMessageTriggerSelectScreen(vk, peerId, triggerButtons) {
-  await vk.sendText(peerId, "Когда сообщение должно отправляться?", {
+export async function sendMessageTriggerSelectScreen(vk, peerId, text, triggerButtons) {
+  await vk.sendText(peerId, text, {
     keyboard: createMessageTriggerKeyboard(triggerButtons),
   });
 }

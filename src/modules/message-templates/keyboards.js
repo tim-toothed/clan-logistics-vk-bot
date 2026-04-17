@@ -19,12 +19,12 @@ export function createBotMessagesKeyboard(messageButtons = []) {
 }
 
 export function createMessageTriggerKeyboard(triggerButtons = []) {
-  return createKeyboard([
+  const rows = [
     ...triggerButtons.map((button) => [
       {
         label: button.label,
-        color: "primary",
-        payload: {
+        color: button.color ?? "primary",
+        payload: button.payload ?? {
           action: ACTIONS.MESSAGE_TRIGGER_SELECT,
           triggerType: button.triggerType,
           stationId: button.stationId ?? null,
@@ -32,8 +32,32 @@ export function createMessageTriggerKeyboard(triggerButtons = []) {
         },
       },
     ]),
-    [{ label: "Назад", color: "secondary", payload: { action: ACTIONS.MESSAGES_MENU_BACK } }],
-  ]);
+  ];
+
+  const navigationButtons = [];
+
+  if (Number.isInteger(triggerButtons.previousPage)) {
+    navigationButtons.push({
+      label: "← Назад",
+      color: "secondary",
+      payload: { action: ACTIONS.MESSAGE_TRIGGER_PAGE, page: triggerButtons.previousPage },
+    });
+  }
+
+  if (Number.isInteger(triggerButtons.nextPage)) {
+    navigationButtons.push({
+      label: "Дальше →",
+      color: "secondary",
+      payload: { action: ACTIONS.MESSAGE_TRIGGER_PAGE, page: triggerButtons.nextPage },
+    });
+  }
+
+  if (navigationButtons.length) {
+    rows.push(navigationButtons);
+  }
+
+  rows.push([{ label: "Назад", color: "secondary", payload: { action: ACTIONS.MESSAGES_MENU_BACK } }]);
+  return createKeyboard(rows);
 }
 
 export function createMessageRecordingKeyboard() {

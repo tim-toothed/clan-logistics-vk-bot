@@ -17,3 +17,44 @@ export async function ensureUser(env, vkUserId) {
 
   return dbFirst(env, "SELECT * FROM users WHERE vk_user_id = ?", [normalizedVkUserId]);
 }
+
+export async function setUserAdminMode(env, userId, stationId = null) {
+  await dbRun(
+    env,
+    `
+      UPDATE users
+      SET is_admin = 1,
+          station_id = ?,
+          team_id = NULL
+      WHERE id = ?
+    `,
+    [stationId, userId],
+  );
+}
+
+export async function setUserParticipantMode(env, userId) {
+  await dbRun(
+    env,
+    `
+      UPDATE users
+      SET is_admin = 0,
+          station_id = NULL
+      WHERE id = ?
+    `,
+    [userId],
+  );
+}
+
+export async function resetUserRole(env, userId) {
+  await dbRun(
+    env,
+    `
+      UPDATE users
+      SET is_admin = 0,
+          station_id = NULL,
+          team_id = NULL
+      WHERE id = ?
+    `,
+    [userId],
+  );
+}

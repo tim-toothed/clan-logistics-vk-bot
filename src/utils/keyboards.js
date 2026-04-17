@@ -44,6 +44,14 @@ export function createAdminStationKeyboard(stations = []) {
   return createKeyboard(rows);
 }
 
+export function createStationsTeamsKeyboard() {
+  return createKeyboard([
+    [{ label: "Команды", color: "primary" }],
+    [{ label: "Станции", color: "primary" }],
+    [{ label: "Назад", color: "secondary" }],
+  ]);
+}
+
 export function createAdminMenuKeyboard() {
   return createKeyboard([
     [{ label: "Моя станция", color: "primary" }],

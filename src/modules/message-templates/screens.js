@@ -1,10 +1,10 @@
 import {
-  createBackKeyboard,
   createBotMessagesKeyboard,
   createExistingMessageActionsKeyboard,
   createMessageRecordingKeyboard,
   createMessageTriggerKeyboard,
 } from "./keyboards.js";
+import { createBackKeyboard } from "../../ui/core-keyboards.js";
 
 export async function sendBotMessagesMenuScreen(vk, peerId, messageButtons) {
   await vk.sendText(peerId, "Вот, какие сообщения сейчас есть для участников", {

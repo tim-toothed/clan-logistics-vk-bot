@@ -135,23 +135,6 @@ export async function handleDefaultUiMessage(env, payload, state, vk, ctx, provi
   await sendWhoAreYouScreen(vk, context.peerId);
 }
 
-export const legacyCommandMap = {
-  message_new: {
-    handleTextMessage: handleMessageNew,
-  },
-  start: {
-    handleCommand: handleStartCommand,
-  },
-  help: {
-    handleCommand: handleHelpCommand,
-  },
-  default: {
-    handleTextMessage: handleDefaultUiMessage,
-  },
-};
-
-export default legacyCommandMap;
-
 function findTextCommandHandler(input) {
   if (!input) {
     return null;

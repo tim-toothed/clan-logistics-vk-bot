@@ -2,7 +2,7 @@
 
 VK bot for quest logistics on Cloudflare Workers.
 
-The project is currently being migrated from a command-first template to a UI-first architecture. The bot already works through buttons and user state, so the codebase is being reorganized around screens, feature modules, and routing by `payload.action` / `state_type`.
+The project has been reorganized from a command-first template into a UI-first architecture. The bot works through buttons and user state, so the codebase is now structured around screens, feature modules, and routing by `payload.action` / `state_type`.
 
 ## Current structure
 
@@ -23,10 +23,8 @@ The project is currently being migrated from a command-first template to a UI-fi
   - `message-templates`
   - `status`
   - `reset`
-- `src/flows/*`
-  Legacy compatibility layer. Flow files now mostly re-export logic from `src/modules/*` for backward compatibility.
-- `src/ui/*`
-  Shared VK UI helpers plus thin compatibility exports for legacy imports.
+- `src/ui/core-keyboards.js`
+  Shared VK keyboard primitives used by feature modules.
 - `src/db/*`
   D1 repositories and database access.
 - `src/utils/*`
@@ -34,7 +32,7 @@ The project is currently being migrated from a command-first template to a UI-fi
 
 ## Migration direction
 
-The target architecture is feature-first rather than command-first:
+The architecture is feature-first rather than command-first:
 
 - welcome
 - admin-home
@@ -43,8 +41,6 @@ The target architecture is feature-first rather than command-first:
 - my-station
 - status
 - reset
-
-`welcome-flow.js`, `stations-teams-flow.js`, `bot-messages-flow.js`, and `my-station-flow.js` are now compatibility wrappers around extracted feature modules.
 
 ## Local setup
 
@@ -76,9 +72,16 @@ Set secrets in the Worker:
 npx wrangler secret put VK_GROUP_TOKEN
 npx wrangler secret put VK_CONFIRMATION_TOKEN
 npx wrangler secret put VK_SECRET
+npx wrangler secret put ADMIN_PASSWORD
 ```
 
 `VK_API_VERSION` is stored in `wrangler.jsonc` as a regular variable.
+
+To validate the Worker bundle before deploy, run:
+
+```bash
+npx wrangler deploy --dry-run --outdir dist
+```
 
 ## VK callback setup
 

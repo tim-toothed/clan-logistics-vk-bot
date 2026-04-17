@@ -31,7 +31,7 @@ export function createActiveStationKeyboard(teamId) {
     [
       {
         label: "Завершить станцию",
-        color: "positive",
+        color: "negative",
         payload: { action: ACTIONS.STATION_FINISH, teamId },
       },
     ],

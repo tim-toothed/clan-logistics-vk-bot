@@ -1,5 +1,5 @@
 import { getUserState } from "../db/user-state-repository.js";
-import { ensureUser } from "../db/users-repository.js";
+import { ensureVkUser } from "./ensure-user.js";
 import { normalizeText } from "../utils/text.js";
 import { parseVkButtonPayload } from "../utils/vk-message.js";
 
@@ -13,7 +13,7 @@ export async function createFlowContext(env, payload, vk) {
 
   const rawText = getMessageText(payload);
   const buttonPayload = parseVkButtonPayload(payload);
-  const user = await ensureUser(env, vkUserId);
+  const user = await ensureVkUser(env, vk, vkUserId);
   const userState = await getUserState(env, user.id);
 
   return {

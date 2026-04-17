@@ -1,21 +1,72 @@
 import { dbAll, dbFirst, dbRun } from "./client.js";
 
-export async function ensureUser(env, vkUserId) {
+const VK_FALLBACK_DISPLAY_NAME_PREFIX = "VK ";
+
+export async function ensureUser(env, vkUserId, displayName = null) {
   const normalizedVkUserId = String(vkUserId);
-  const defaultDisplayName = `VK ${normalizedVkUserId}`;
+  const fallbackDisplayName = getFallbackDisplayName(normalizedVkUserId);
+  const normalizedDisplayName = normalizeDisplayName(displayName, fallbackDisplayName);
+  const existingUser = await dbFirst(env, "SELECT * FROM users WHERE vk_user_id = ?", [normalizedVkUserId]);
 
-  await dbRun(
-    env,
-    `
-      INSERT INTO users (vk_user_id, display_name, is_admin, station_id, team_id)
-      VALUES (?, ?, 0, NULL, NULL)
-      ON CONFLICT(vk_user_id) DO UPDATE SET
-        display_name = excluded.display_name
-    `,
-    [normalizedVkUserId, defaultDisplayName],
-  );
+  if (!existingUser) {
+    await dbRun(
+      env,
+      `
+        INSERT INTO users (vk_user_id, display_name, is_admin, station_id, team_id)
+        VALUES (?, ?, 0, NULL, NULL)
+      `,
+      [normalizedVkUserId, normalizedDisplayName ?? fallbackDisplayName],
+    );
 
-  return dbFirst(env, "SELECT * FROM users WHERE vk_user_id = ?", [normalizedVkUserId]);
+    return dbFirst(env, "SELECT * FROM users WHERE vk_user_id = ?", [normalizedVkUserId]);
+  }
+
+  if (normalizedDisplayName && normalizedDisplayName !== existingUser.display_name) {
+    await dbRun(
+      env,
+      `
+        UPDATE users
+        SET display_name = ?
+        WHERE id = ?
+      `,
+      [normalizedDisplayName, existingUser.id],
+    );
+
+    return {
+      ...existingUser,
+      display_name: normalizedDisplayName,
+    };
+  }
+
+  return existingUser;
+}
+
+export function getFallbackDisplayName(vkUserId) {
+  return `${VK_FALLBACK_DISPLAY_NAME_PREFIX}${String(vkUserId)}`;
+}
+
+export function isFallbackDisplayName(displayName, vkUserId = null) {
+  if (typeof displayName !== "string") {
+    return true;
+  }
+
+  const normalizedDisplayName = displayName.trim();
+
+  if (vkUserId !== null && vkUserId !== undefined) {
+    return normalizedDisplayName === getFallbackDisplayName(vkUserId);
+  }
+
+  return normalizedDisplayName.startsWith(VK_FALLBACK_DISPLAY_NAME_PREFIX);
+}
+
+function normalizeDisplayName(displayName, fallbackDisplayName) {
+  const normalizedDisplayName = String(displayName ?? "").trim();
+
+  if (!normalizedDisplayName || normalizedDisplayName === fallbackDisplayName) {
+    return null;
+  }
+
+  return normalizedDisplayName;
 }
 
 export async function setUserAdminMode(env, userId, stationId = null) {
@@ -105,7 +156,7 @@ export async function listAdminLabelsByStation(env, stationId) {
     [stationId],
   );
 
-  return rows.map((row) => row.display_name || `VK ${row.vk_user_id}`);
+  return rows.map((row) => row.display_name || getFallbackDisplayName(row.vk_user_id));
 }
 
 export async function listParticipantPeerIdsByTeam(env, teamId) {

@@ -1,10 +1,10 @@
 import {
   createAdminStationKeyboard,
-  createBackKeyboard,
   createParticipantKeyboard,
   createParticipantTeamKeyboard,
   createWhoAreYouKeyboard,
 } from "./keyboards.js";
+import { createBackKeyboard } from "../../ui/core-keyboards.js";
 
 export const BOT_START_MESSAGE = "Тест: стартовое сообщение бота. Здесь позже будет bot_start_message.";
 export const PARTICIPANT_WELCOME_MESSAGE =

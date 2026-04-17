@@ -1,7 +1,6 @@
 import { handleScheduledEvent, handleVkFetch } from "./app/handle-update.js";
 
-const state = {
-};
+const state = {};
 
 export default {
   async fetch(request, env, ctx) {

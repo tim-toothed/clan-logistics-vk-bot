@@ -41,22 +41,31 @@ async function buildStatusSummary(env) {
     const admins = await listAdminLabelsByStation(env, station.id);
     const completedCount = Number(station.completed_teams_count ?? 0);
     const avgDuration = formatDuration(station.avg_duration_seconds);
-    const timesList = durations.length ? durations.map((item) => formatDuration(item.duration_seconds)).join(" | ") : "нет данных";
+    const timesList = durations.length ? durations.map((item) => formatDuration(item.duration_seconds)).join(", ") : "нет данных";
     const remainingCount = Math.max(0, totalTeams - completedCount);
+    const currentTeamLine = currentTeam ? currentTeam.team_name : "нет";
 
     sections.push(
       [
         station.station_name,
+        `Статус: ${formatStationStatus(station.status)}`,
+        `Текущая команда: ${currentTeamLine}`,
         `Организаторы: ${admins.length ? admins.join(", ") : "не назначены"}`,
-        `Статус: ${formatStationStatus(station.status)}${currentTeam ? `, сейчас команда ${currentTeam.team_name}` : ""}`,
-        `avg_time прохождения: ${avgDuration} (${timesList})`,
-        `Команд прошло: ${completedCount}`,
         `Осталось команд: ${remainingCount}`,
+        `Среднее время: ${avgDuration}`,
+        `Все времена: ${timesList}`,
       ].join("\n"),
     );
   }
 
-  return `Статистика на ${new Date().toLocaleString("ru-RU")}\n\n${sections.join("\n\n")}`;
+  return [
+    "Положение дел",
+    `Обновлено: ${new Date().toLocaleString("ru-RU")}`,
+    `Станций: ${stations.length}`,
+    `Команд: ${totalTeams}`,
+    "",
+    sections.join("\n\n--------------------\n\n"),
+  ].join("\n");
 }
 
 function formatStationStatus(status) {

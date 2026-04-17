@@ -17,6 +17,19 @@ export function createVkClient(env) {
       });
     },
 
+    async getUserDisplayName(vkUserId) {
+      const users = await callVkApi({
+        method: "users.get",
+        params: {
+          user_ids: vkUserId,
+        },
+        token: env.VK_GROUP_TOKEN,
+        version: apiVersion,
+      });
+
+      return formatVkUserDisplayName(users?.[0], vkUserId);
+    },
+
     sendText(peerId, message, params = {}) {
       return callVkApi({
         method: "messages.send",
@@ -31,6 +44,23 @@ export function createVkClient(env) {
       });
     },
   };
+}
+
+function formatVkUserDisplayName(user, vkUserId) {
+  const fullName = [user?.first_name, user?.last_name]
+    .filter((part) => typeof part === "string" && part.trim())
+    .join(" ")
+    .trim();
+
+  if (fullName) {
+    return fullName;
+  }
+
+  if (typeof user?.screen_name === "string" && user.screen_name.trim()) {
+    return user.screen_name.trim();
+  }
+
+  return `VK ${vkUserId}`;
 }
 
 async function callVkApi({ method, params, token, version }) {

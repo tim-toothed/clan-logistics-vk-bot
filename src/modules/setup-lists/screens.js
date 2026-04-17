@@ -1,4 +1,5 @@
-import { createBackKeyboard, createStationsTeamsKeyboard } from "./keyboards.js";
+import { createStationsTeamsKeyboard } from "./keyboards.js";
+import { createBackKeyboard } from "../../ui/core-keyboards.js";
 
 export async function sendStationsTeamsMenuScreen(vk, peerId) {
   await vk.sendText(peerId, "Какой раздел вы хотите редактировать?", {

@@ -1,8 +1,9 @@
 import { ACTIONS } from "../../app/action-types.js";
+import { ensureVkUser } from "../../app/ensure-user.js";
 import { STATE_TYPES } from "../../app/state-types.js";
 import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../../db/messages-repository.js";
 import { clearUserState, setUserState } from "../../db/user-state-repository.js";
-import { ensureUser, resetUserRole, setUserAdminMode, setUserParticipantMode, setUserParticipantTeam } from "../../db/users-repository.js";
+import { resetUserRole, setUserAdminMode, setUserParticipantMode, setUserParticipantTeam } from "../../db/users-repository.js";
 import { findStationByName, findTeamByName, getStations, getTeams } from "../../db/setup-repository.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
@@ -21,8 +22,9 @@ import { createParticipantKeyboard } from "./keyboards.js";
 import { sendTemplateSequence } from "../../utils/vk-message.js";
 
 export async function handleStartCommand(env, payload, state, vk) {
+  void state;
   const peerId = getPeerId(payload);
-  const user = await ensureCurrentUser(env, payload);
+  const user = await ensureCurrentUser(env, payload, vk);
 
   await resetUserRole(env, user.id);
   await clearUserState(env, user.id);
@@ -140,14 +142,14 @@ async function resetToWhoAreYou(context) {
   await sendWhoAreYouScreen(context.vk, context.peerId);
 }
 
-async function ensureCurrentUser(env, payload) {
+async function ensureCurrentUser(env, payload, vk) {
   const vkUserId = payload?.object?.message?.from_id;
 
   if (!vkUserId) {
     throw new Error("VK payload did not contain from_id");
   }
 
-  return ensureUser(env, vkUserId);
+  return ensureVkUser(env, vk, vkUserId);
 }
 
 function getPeerId(payload) {

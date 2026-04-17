@@ -29,5 +29,5 @@ export function createButtonsKeyboard(buttons, options = {}) {
 }
 
 export function createBackKeyboard() {
-  return createKeyboard([[{ label: "Назад", color: "secondary" }]]);
+  return createKeyboard([[{ label: "Назад", color: "secondary" }]], { oneTime: true });
 }

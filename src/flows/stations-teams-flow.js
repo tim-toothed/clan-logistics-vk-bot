@@ -11,6 +11,12 @@ import {
   sendTeamsUpdatedScreen,
 } from "../ui/screens.js";
 
+export async function openStationsTeamsMenu(context) {
+  await setUserState(context.env, context.user.id, "manage_lists_menu", "idle");
+  await sendStationsTeamsMenuScreen(context.vk, context.peerId);
+  return true;
+}
+
 export async function handleStationsTeamsMenuState(context) {
   if (context.input === "назад") {
     await setUserState(context.env, context.user.id, "admin_menu", "idle");

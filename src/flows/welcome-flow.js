@@ -1,6 +1,7 @@
-import { getStations, findStationByName } from "../db/setup-repository.js";
+import { findStationByName, findTeamByName, getStations, getTeams } from "../db/setup-repository.js";
+import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../db/messages-repository.js";
 import { clearUserState, setUserState } from "../db/user-state-repository.js";
-import { ensureUser, resetUserRole, setUserAdminMode, setUserParticipantMode } from "../db/users-repository.js";
+import { ensureUser, resetUserRole, setUserAdminMode, setUserParticipantMode, setUserParticipantTeam } from "../db/users-repository.js";
 import {
   ADMIN_MENU_WELCOME_MESSAGE,
   BOT_START_MESSAGE,
@@ -10,8 +11,12 @@ import {
   sendInvalidAdminStationScreen,
   sendInvalidPasswordScreen,
   sendParticipantHomeScreen,
+  sendParticipantTeamChoiceScreen,
+  sendInvalidParticipantTeamScreen,
   sendWhoAreYouScreen,
 } from "../ui/screens.js";
+import { createParticipantKeyboard } from "../ui/keyboards.js";
+import { sendTemplateSequence } from "../utils/vk-message.js";
 
 export async function handleStartCommand(env, payload, state, vk) {
   const peerId = getPeerId(payload);
@@ -19,14 +24,16 @@ export async function handleStartCommand(env, payload, state, vk) {
 
   await resetUserRole(env, user.id);
   await clearUserState(env, user.id);
-  await vk.sendText(peerId, BOT_START_MESSAGE);
+  await sendStartTemplateOrFallback(env, vk, peerId);
   await sendWhoAreYouScreen(vk, peerId);
 }
 
 export async function handleParticipantSelection(context) {
   await setUserParticipantMode(context.env, context.user.id);
-  await setUserState(context.env, context.user.id, "participant_home", "idle");
-  await sendParticipantHomeScreen(context.vk, context.peerId);
+  const teams = await getTeams(context.env);
+
+  await setUserState(context.env, context.user.id, "await_participant_team", "wait_team_choice");
+  await sendParticipantTeamChoiceScreen(context.vk, context.peerId, teams);
 }
 
 export async function handleOrganizerSelection(context) {
@@ -68,6 +75,28 @@ export async function handleAdminPasswordState(context) {
     context.peerId,
     stations.map((station) => station.station_name),
   );
+  return true;
+}
+
+export async function handleParticipantTeamState(context) {
+  if (context.action === "back_to_who_are_you" || context.input === "назад") {
+    await resetToWhoAreYou(context);
+    return true;
+  }
+
+  const selectedTeam = context.buttonPayload?.teamId
+    ? await findTeamByIdFromList(context.env, context.buttonPayload.teamId)
+    : await findTeamByName(context.env, context.rawText);
+
+  if (!selectedTeam) {
+    const teams = await getTeams(context.env);
+    await sendInvalidParticipantTeamScreen(context.vk, context.peerId, teams);
+    return true;
+  }
+
+  await setUserParticipantTeam(context.env, context.user.id, selectedTeam.id);
+  await setUserState(context.env, context.user.id, "participant_home", "idle");
+  await sendParticipantTemplateOrFallback(context.env, context.vk, context.peerId);
   return true;
 }
 
@@ -121,4 +150,33 @@ async function ensureCurrentUser(env, payload) {
 
 function getPeerId(payload) {
   return payload?.object?.message?.peer_id;
+}
+
+async function sendStartTemplateOrFallback(env, vk, peerId) {
+  const template = await getMessageByTrigger(env, MESSAGE_TRIGGER_TYPES.BOT_START, null);
+
+  if (template?.content_items?.length) {
+    await sendTemplateSequence(vk, peerId, template.content_items);
+    return;
+  }
+
+  await vk.sendText(peerId, BOT_START_MESSAGE);
+}
+
+async function sendParticipantTemplateOrFallback(env, vk, peerId) {
+  const template = await getMessageByTrigger(env, MESSAGE_TRIGGER_TYPES.PARTICIPANT_WELCOME, null);
+
+  if (template?.content_items?.length) {
+    await sendTemplateSequence(vk, peerId, template.content_items, {
+      keyboard: createParticipantKeyboard(),
+    });
+    return;
+  }
+
+  await sendParticipantHomeScreen(vk, peerId);
+}
+
+async function findTeamByIdFromList(env, teamId) {
+  const teams = await getTeams(env);
+  return teams.find((team) => Number(team.id) === Number(teamId)) ?? null;
 }

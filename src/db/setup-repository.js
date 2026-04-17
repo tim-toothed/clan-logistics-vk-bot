@@ -4,6 +4,12 @@ export async function getTeams(env) {
   return dbAll(env, "SELECT id, team_name FROM teams ORDER BY id ASC");
 }
 
+export async function findTeamByName(env, teamName) {
+  return dbFirst(env, "SELECT id, team_name FROM teams WHERE lower(team_name) = lower(?)", [
+    String(teamName ?? "").trim(),
+  ]);
+}
+
 export async function getStations(env) {
   return dbAll(env, "SELECT id, station_name FROM stations ORDER BY id ASC");
 }

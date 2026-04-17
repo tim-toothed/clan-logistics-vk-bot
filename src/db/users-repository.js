@@ -1,4 +1,4 @@
-import { dbFirst, dbRun } from "./client.js";
+import { dbAll, dbFirst, dbRun } from "./client.js";
 
 export async function ensureUser(env, vkUserId) {
   const normalizedVkUserId = String(vkUserId);
@@ -45,6 +45,20 @@ export async function setUserParticipantMode(env, userId) {
   );
 }
 
+export async function setUserParticipantTeam(env, userId, teamId) {
+  await dbRun(
+    env,
+    `
+      UPDATE users
+      SET is_admin = 0,
+          station_id = NULL,
+          team_id = ?
+      WHERE id = ?
+    `,
+    [teamId, userId],
+  );
+}
+
 export async function resetUserRole(env, userId) {
   await dbRun(
     env,
@@ -56,5 +70,66 @@ export async function resetUserRole(env, userId) {
       WHERE id = ?
     `,
     [userId],
+  );
+}
+
+export async function getUserById(env, userId) {
+  return dbFirst(env, "SELECT * FROM users WHERE id = ?", [userId]);
+}
+
+export async function listAdminPeerIdsByStation(env, stationId) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT vk_user_id
+      FROM users
+      WHERE is_admin = 1
+        AND station_id = ?
+    `,
+    [stationId],
+  );
+
+  return rows.map((row) => Number(row.vk_user_id)).filter(Boolean);
+}
+
+export async function listAdminLabelsByStation(env, stationId) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT display_name, vk_user_id
+      FROM users
+      WHERE is_admin = 1
+        AND station_id = ?
+      ORDER BY id ASC
+    `,
+    [stationId],
+  );
+
+  return rows.map((row) => row.display_name || `VK ${row.vk_user_id}`);
+}
+
+export async function listParticipantPeerIdsByTeam(env, teamId) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT vk_user_id
+      FROM users
+      WHERE is_admin = 0
+        AND team_id = ?
+    `,
+    [teamId],
+  );
+
+  return rows.map((row) => Number(row.vk_user_id)).filter(Boolean);
+}
+
+export async function resetUsersEventData(env) {
+  await dbRun(
+    env,
+    `
+      UPDATE users
+      SET station_id = NULL,
+          team_id = NULL
+    `,
   );
 }

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/main.js && node --check src/CommandMap.js && node --check src/utils/vk-api.js && node --check src/utils/db.js && node --check src/utils/keyboards.js && node --check src/utils/users.js && node --check src/utils/user-state.js && node --check src/utils/setup-lists.js && node --check src/utils/onboarding.js"
+    "check": "node --check src/main.js && node --check src/CommandMap.js && node --check src/commands/help.js && node --check src/utils/vk-api.js && node --check src/utils/text.js && node --check src/db/client.js && node --check src/db/users-repository.js && node --check src/db/user-state-repository.js && node --check src/db/setup-repository.js && node --check src/ui/keyboards.js && node --check src/ui/screens.js && node --check src/flows/welcome-flow.js && node --check src/flows/admin-menu-flow.js && node --check src/flows/stations-teams-flow.js"
   },
   "devDependencies": {
     "wrangler": "^4.13.2"

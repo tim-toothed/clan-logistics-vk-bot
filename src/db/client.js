@@ -26,7 +26,3 @@ export async function dbBatch(env, statements) {
 
   return getDb(env).batch(prepared);
 }
-
-export function nowIso() {
-  return new Date().toISOString();
-}

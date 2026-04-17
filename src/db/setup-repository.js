@@ -1,4 +1,4 @@
-import { dbAll, dbBatch, dbFirst } from "./db.js";
+import { dbAll, dbBatch, dbFirst } from "./client.js";
 
 export async function getTeams(env) {
   return dbAll(env, "SELECT id, team_name FROM teams ORDER BY id ASC");
@@ -12,54 +12,6 @@ export async function findStationByName(env, stationName) {
   return dbFirst(env, "SELECT id, station_name FROM stations WHERE lower(station_name) = lower(?)", [
     String(stationName ?? "").trim(),
   ]);
-}
-
-export function parseNumberedList(rawText) {
-  const lines = String(rawText ?? "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) {
-    return null;
-  }
-
-  const values = [];
-
-  for (const [index, line] of lines.entries()) {
-    const match = line.match(/^(\d+)\.\s+(.+)$/u);
-
-    if (!match) {
-      return null;
-    }
-
-    const expectedNumber = index + 1;
-    const actualNumber = Number(match[1]);
-
-    if (actualNumber !== expectedNumber) {
-      return null;
-    }
-
-    const value = match[2].trim();
-
-    if (!value) {
-      return null;
-    }
-
-    values.push(value);
-  }
-
-  return values;
-}
-
-export function formatNumberedList(items, fieldName) {
-  if (!items.length) {
-    return "отсутствует";
-  }
-
-  return items
-    .map((item, index) => `${index + 1}. ${item[fieldName]}`)
-    .join("\n");
 }
 
 export async function replaceTeams(env, teamNames) {

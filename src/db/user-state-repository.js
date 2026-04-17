@@ -1,4 +1,4 @@
-import { dbFirst, dbRun } from "./db.js";
+import { dbFirst, dbRun } from "./client.js";
 
 export async function getUserState(env, userId) {
   const row = await dbFirst(env, "SELECT * FROM user_state WHERE user_id = ?", [userId]);

@@ -1,4 +1,4 @@
-import { dbFirst, dbRun } from "./db.js";
+import { dbFirst, dbRun } from "./client.js";
 
 export async function ensureUser(env, vkUserId) {
   const normalizedVkUserId = String(vkUserId);

@@ -1,0 +1,169 @@
+import { ACTIONS } from "./action-types.js";
+import { createFlowContext } from "./create-context.js";
+import { STATE_TYPES } from "./state-types.js";
+import { handleHelpCommand } from "../commands/help.js";
+import {
+  handleBotMessagesMenuState,
+  handleMessageRecordingState,
+  handleMessageTemplateActionsState,
+  handleMessageTriggerMenuState,
+  openBotMessagesMenu,
+} from "../modules/message-templates/router.js";
+import { handleMyStationActiveState, handleMyStationMenuState, openMyStationMenu } from "../modules/my-station/router.js";
+import { handleAdminMenuState, handleParticipantHomeState } from "../modules/admin-home/router.js";
+import {
+  handleAdminPasswordState,
+  handleAdminStationState,
+  handleGlobalBack,
+  handleGlobalExit,
+  handleOrganizerSelection,
+  handleParticipantSelection,
+  handleParticipantTeamState,
+  handleStartCommand,
+  handleWrongRoleSelection,
+} from "../modules/welcome/router.js";
+import { handleResetConfirmState, openResetConfirm } from "../modules/reset/router.js";
+import { handleStationsListState, handleStationsTeamsMenuState, handleTeamsListState, openStationsTeamsMenu } from "../modules/setup-lists/router.js";
+import { handleStatusViewState, openStatusScreen } from "../modules/status/router.js";
+import { sendWhoAreYouScreen } from "../modules/welcome/screens.js";
+
+const INPUT_PARTICIPANT = "\u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a";
+const INPUT_ORGANIZER = "\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440";
+const INPUT_ADMIN = "\u0430\u0434\u043c\u0438\u043d";
+const INPUT_WRONG_ROLE = "\u043f\u0435\u0440\u0435\u043f\u0443\u0442\u0430\u043b, \u044f \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440";
+const INPUT_BACK = "\u043d\u0430\u0437\u0430\u0434";
+const INPUT_EXIT = "\u0432\u044b\u0439\u0442\u0438";
+
+const stateHandlers = {
+  [STATE_TYPES.AWAIT_PARTICIPANT_TEAM]: handleParticipantTeamState,
+  [STATE_TYPES.AWAIT_ADMIN_PASSWORD]: handleAdminPasswordState,
+  [STATE_TYPES.AWAIT_ADMIN_STATION]: handleAdminStationState,
+  [STATE_TYPES.ADMIN_MENU]: handleAdminMenuState,
+  [STATE_TYPES.MY_STATION_MENU]: handleMyStationMenuState,
+  [STATE_TYPES.MY_STATION_ACTIVE]: handleMyStationActiveState,
+  [STATE_TYPES.STATUS_VIEW]: handleStatusViewState,
+  [STATE_TYPES.MANAGE_LISTS_MENU]: handleStationsTeamsMenuState,
+  [STATE_TYPES.EDIT_TEAMS_LIST]: handleTeamsListState,
+  [STATE_TYPES.EDIT_STATIONS_LIST]: handleStationsListState,
+  [STATE_TYPES.BOT_MESSAGES_MENU]: handleBotMessagesMenuState,
+  [STATE_TYPES.MESSAGE_TRIGGER_MENU]: handleMessageTriggerMenuState,
+  [STATE_TYPES.MESSAGE_RECORDING]: handleMessageRecordingState,
+  [STATE_TYPES.MESSAGE_TEMPLATE_ACTIONS]: handleMessageTemplateActionsState,
+  [STATE_TYPES.RESET_CONFIRM]: handleResetConfirmState,
+  [STATE_TYPES.PARTICIPANT_HOME]: handleParticipantHomeState,
+};
+
+const directInputHandlers = {
+  [INPUT_PARTICIPANT]: handleParticipantSelection,
+  [INPUT_ORGANIZER]: handleOrganizerSelection,
+  [INPUT_ADMIN]: handleOrganizerSelection,
+  [INPUT_WRONG_ROLE]: handleWrongRoleSelection,
+};
+
+const textCommandHandlers = {
+  start: handleStartCommand,
+  help: handleHelpCommand,
+};
+
+export async function handleMessageNew(env, payload, state, vk, ctx) {
+  const context = await createFlowContext(env, payload, vk);
+  const commandHandler = findTextCommandHandler(context.input);
+
+  if (commandHandler) {
+    await commandHandler(env, payload, state, vk, ctx);
+    return;
+  }
+
+  await handleDefaultUiMessage(env, payload, state, vk, ctx, context);
+}
+
+export async function handleDefaultUiMessage(env, payload, state, vk, ctx, providedContext = null) {
+  const context = providedContext ?? (await createFlowContext(env, payload, vk));
+
+  if (context.input === INPUT_EXIT || context.action === ACTIONS.EXIT) {
+    await handleGlobalExit(context);
+    return;
+  }
+
+  if (context.action === ACTIONS.OPEN_MY_STATION) {
+    await openMyStationMenu(context);
+    return;
+  }
+
+  if (context.action === ACTIONS.OPEN_STATUS) {
+    await openStatusScreen(context);
+    return;
+  }
+
+  if (context.action === ACTIONS.OPEN_BOT_MESSAGES) {
+    await openBotMessagesMenu(context);
+    return;
+  }
+
+  if (context.action === ACTIONS.OPEN_STATIONS_TEAMS) {
+    await openStationsTeamsMenu(context);
+    return;
+  }
+
+  if (context.action === ACTIONS.OPEN_RESET) {
+    await openResetConfirm(context);
+    return;
+  }
+
+  const stateHandler = stateHandlers[context.userState?.state_type];
+
+  if (stateHandler) {
+    const handled = await stateHandler(context);
+
+    if (handled) {
+      return;
+    }
+  }
+
+  const directInputHandler = directInputHandlers[context.input];
+
+  if (directInputHandler) {
+    await directInputHandler(context);
+    return;
+  }
+
+  if (context.input === INPUT_BACK) {
+    await handleGlobalBack(context);
+    return;
+  }
+
+  await sendWhoAreYouScreen(vk, context.peerId);
+}
+
+export const legacyCommandMap = {
+  message_new: {
+    handleTextMessage: handleMessageNew,
+  },
+  start: {
+    handleCommand: handleStartCommand,
+  },
+  help: {
+    handleCommand: handleHelpCommand,
+  },
+  default: {
+    handleTextMessage: handleDefaultUiMessage,
+  },
+};
+
+export default legacyCommandMap;
+
+function findTextCommandHandler(input) {
+  if (!input) {
+    return null;
+  }
+
+  const normalizedInput = normalizeCommandInput(input);
+  const commandName = Object.keys(textCommandHandlers).find((command) => normalizedInput.startsWith(command));
+
+  return commandName ? textCommandHandlers[commandName] : null;
+}
+
+function normalizeCommandInput(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized.startsWith("/") ? normalized.slice(1) : normalized;
+}

@@ -1,11 +1,50 @@
 # clan-logistics-vk-bot
 
-Minimal Cloudflare Worker template for a VK community bot with a Telegram-like structure:
+VK bot for quest logistics on Cloudflare Workers.
 
-- `src/main.js` is the Worker entrypoint and universal event dispatcher
-- `src/CommandMap.js` stores command and event bindings
-- `src/commands/*` contains business logic handlers
-- `src/utils/*` stores internal helpers such as VK API and future DB helpers
+The project is currently being migrated from a command-first template to a UI-first architecture. The bot already works through buttons and user state, so the codebase is being reorganized around screens, feature modules, and routing by `payload.action` / `state_type`.
+
+## Current structure
+
+- `src/main.js`
+  Worker entrypoint. Delegates VK updates into the application layer.
+- `src/app/*`
+  Application orchestration:
+  - `handle-update.js` handles VK callback requests
+  - `create-context.js` builds the shared flow context
+  - `ui-router.js` routes commands, UI actions, and user states
+  - `action-types.js` / `state-types.js` store shared constants
+- `src/modules/*`
+  Feature-oriented UI modules. The first extracted modules are:
+  - `welcome`
+  - `admin-home`
+  - `my-station`
+  - `setup-lists`
+  - `message-templates`
+  - `status`
+  - `reset`
+- `src/flows/*`
+  Legacy compatibility layer. Flow files now mostly re-export logic from `src/modules/*` for backward compatibility.
+- `src/ui/*`
+  Shared VK UI helpers plus thin compatibility exports for legacy imports.
+- `src/db/*`
+  D1 repositories and database access.
+- `src/utils/*`
+  VK-specific helpers and text utilities.
+
+## Migration direction
+
+The target architecture is feature-first rather than command-first:
+
+- welcome
+- admin-home
+- setup-lists
+- message-templates
+- my-station
+- status
+- reset
+
+`welcome-flow.js`, `stations-teams-flow.js`, `bot-messages-flow.js`, and `my-station-flow.js` are now compatibility wrappers around extracted feature modules.
 
 ## Local setup
 
@@ -21,6 +60,12 @@ npm install
 
 ```bash
 npm run dev
+```
+
+4. Run syntax checks:
+
+```bash
+npm run check
 ```
 
 ## Cloudflare setup
@@ -42,10 +87,3 @@ npx wrangler secret put VK_SECRET
 3. Set the Worker URL as the callback endpoint.
 4. Copy the confirmation code and callback secret into Worker secrets.
 5. Subscribe to at least `message_new`.
-
-## Test flow
-
-- `GET /` returns a health check string.
-- `POST /` handles VK callbacks.
-- `confirmation` returns the confirmation token.
-- `message_new` routes to `start`, `help`, or a default reply.

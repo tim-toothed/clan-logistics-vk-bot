@@ -1,0 +1,18 @@
+export const STATE_TYPES = Object.freeze({
+  AWAIT_PARTICIPANT_TEAM: "await_participant_team",
+  AWAIT_ADMIN_PASSWORD: "await_admin_password",
+  AWAIT_ADMIN_STATION: "await_admin_station",
+  ADMIN_MENU: "admin_menu",
+  MY_STATION_MENU: "my_station_menu",
+  MY_STATION_ACTIVE: "my_station_active",
+  STATUS_VIEW: "status_view",
+  MANAGE_LISTS_MENU: "manage_lists_menu",
+  EDIT_TEAMS_LIST: "edit_teams_list",
+  EDIT_STATIONS_LIST: "edit_stations_list",
+  BOT_MESSAGES_MENU: "bot_messages_menu",
+  MESSAGE_TRIGGER_MENU: "message_trigger_menu",
+  MESSAGE_RECORDING: "message_recording",
+  MESSAGE_TEMPLATE_ACTIONS: "message_template_actions",
+  RESET_CONFIRM: "reset_confirm",
+  PARTICIPANT_HOME: "participant_home",
+});

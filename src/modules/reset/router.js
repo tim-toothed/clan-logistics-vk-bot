@@ -25,7 +25,8 @@ import {
   sendResetConfirmScreen,
 } from "./screens.js";
 
-const IMPORT_FILE_EXTENSION = ".json";
+const BACKUP_FILE_EXTENSION = ".json.gz";
+const LEGACY_IMPORT_FILE_EXTENSION = ".json";
 
 export async function openResetConfirm(context) {
   await setUserState(context.env, context.user.id, STATE_TYPES.RESET_CONFIRM, "confirm");
@@ -51,10 +52,13 @@ export async function handleResetConfirmState(context) {
   let backupAttachment;
 
   try {
+    const backupFileContents = await compressBackupText(stringifyEventBackup(backupSnapshot));
+
     backupAttachment = await context.vk.uploadMessageDocument(
       context.peerId,
       backupFileName,
-      stringifyEventBackup(backupSnapshot),
+      backupFileContents,
+      "application/gzip",
     );
   } catch (error) {
     console.error("Failed to create reset backup file", error);
@@ -146,7 +150,7 @@ export async function handleImportWaitFileState(context) {
 
 function buildBackupFileName() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `clan-logistics-backup-${timestamp}${IMPORT_FILE_EXTENSION}`;
+  return `clan-logistics-backup-${timestamp}${BACKUP_FILE_EXTENSION}`;
 }
 
 function extractImportDocument(payload) {
@@ -160,8 +164,8 @@ function extractImportDocument(payload) {
 }
 
 async function downloadImportDocumentText(context, document) {
-  if (typeof document?.ext === "string" && document.ext && document.ext.toLowerCase() !== "json") {
-    throw new Error("Нужен JSON-файл экспорта мероприятия.");
+  if (!isSupportedImportDocument(document)) {
+    throw new Error("Нужен файл экспорта мероприятия от бота.");
   }
 
   const documentUrl = await resolveImportDocumentUrl(context, document);
@@ -174,6 +178,10 @@ async function downloadImportDocumentText(context, document) {
 
   if (!response.ok) {
     throw new Error("Не удалось скачать приложенный файл.");
+  }
+
+  if (isCompressedImportDocument(document)) {
+    return decompressBackupResponse(response);
   }
 
   return response.text();
@@ -198,4 +206,59 @@ async function resolveImportDocumentUrl(context, document) {
 function buildDocumentId(document) {
   const accessKeySuffix = document.access_key ? `_${document.access_key}` : "";
   return `${document.owner_id}_${document.id}${accessKeySuffix}`;
+}
+
+async function compressBackupText(rawText) {
+  const stream = new Blob([rawText], { type: "application/json" }).stream();
+  const compressedStream = stream.pipeThrough(new CompressionStream("gzip"));
+  const compressedBuffer = await new Response(compressedStream).arrayBuffer();
+
+  return new Uint8Array(compressedBuffer);
+}
+
+async function decompressBackupResponse(response) {
+  if (!response.body) {
+    throw new Error("Не удалось прочитать содержимое файла экспорта.");
+  }
+
+  const decompressedStream = response.body.pipeThrough(new DecompressionStream("gzip"));
+  return new Response(decompressedStream).text();
+}
+
+function isSupportedImportDocument(document) {
+  const extension = getImportDocumentExtension(document);
+  return extension === "gz" || extension === "json";
+}
+
+function isCompressedImportDocument(document) {
+  const extension = getImportDocumentExtension(document);
+
+  if (extension === "gz") {
+    return true;
+  }
+
+  const title = String(document?.title ?? "").toLowerCase();
+  return title.endsWith(BACKUP_FILE_EXTENSION);
+}
+
+function getImportDocumentExtension(document) {
+  const explicitExtension = String(document?.ext ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (explicitExtension) {
+    return explicitExtension;
+  }
+
+  const title = String(document?.title ?? "").trim().toLowerCase();
+
+  if (title.endsWith(BACKUP_FILE_EXTENSION)) {
+    return "gz";
+  }
+
+  if (title.endsWith(LEGACY_IMPORT_FILE_EXTENSION)) {
+    return "json";
+  }
+
+  return "";
 }

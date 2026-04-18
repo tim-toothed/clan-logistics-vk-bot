@@ -34,7 +34,7 @@ export async function sendResetBackupNotificationScreen(vk, peerId, attachment, 
 export async function sendImportAwaitFileScreen(vk, peerId) {
   await vk.sendText(
     peerId,
-    'Пришлите JSON-файл экспорта мероприятия, который бот отправляет при сбросе данных. Импорт сработает только если в таблицах teams/stations/events/messages сейчас нет строк.',
+    "Пришлите файл экспорта мероприятия, который бот отправляет при сбросе данных. Импорт сработает только если в таблицах teams/stations/events/messages сейчас нет строк.",
     {
       keyboard: createBackKeyboard(),
     },
@@ -48,9 +48,7 @@ export async function sendImportBlockedScreen(vk, peerId) {
 }
 
 export async function sendImportAdminOnlyScreen(vk, peerId) {
-  await vk.sendText(peerId, "Команда /import доступна только администраторам.", {
-    keyboard: createAdminMenuKeyboard(),
-  });
+  await vk.sendText(peerId, "Команда /import доступна только администраторам.");
 }
 
 export async function sendImportFailedScreen(vk, peerId, reason) {

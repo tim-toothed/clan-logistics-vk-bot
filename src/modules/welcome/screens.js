@@ -7,6 +7,8 @@ import {
 import { createBackKeyboard } from "../../ui/core-keyboards.js";
 
 export const BOT_START_MESSAGE = "Тест: стартовое сообщение бота. Здесь позже будет bot_start_message.";
+export const BOT_START_MENU_HINT =
+  "Если у вас не отображается меню над клавиатурой, нажмите на квадратную кнопку около кнопки выбора эмодзи";
 export const PARTICIPANT_WELCOME_MESSAGE =
   "Тест: вы зашли как участник. Во время мероприятия сюда будут приходить сообщения от бота.";
 export const ADMIN_MENU_WELCOME_MESSAGE =

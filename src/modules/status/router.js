@@ -57,7 +57,7 @@ async function buildStatusSummary(env) {
   }
 
   return [
-    "**Статистика**",
+    "Статистика",
     sections.join("\n\n--------------------\n\n"),
   ].join("\n");
 }

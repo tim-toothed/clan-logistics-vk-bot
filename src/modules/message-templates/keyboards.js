@@ -1,39 +1,38 @@
 import { ACTIONS } from "../../app/action-types.js";
-import { createBackKeyboard, createKeyboard } from "../../ui/core-keyboards.js";
+import { createButtonsKeyboard, createKeyboard, layoutMenuButtons } from "../../ui/core-keyboards.js";
 
 export function createBotMessagesKeyboard(messageButtons = []) {
-  return createKeyboard([
-    [{ label: "Создать новое сообщение", color: "positive", payload: { action: ACTIONS.MESSAGE_CREATE } }],
-    ...messageButtons.map((messageButton) => [
-      {
-        label: messageButton.label,
-        color: "primary",
-        payload: {
-          action: ACTIONS.MESSAGE_OPEN,
-          messageId: messageButton.id,
-        },
+  return createButtonsKeyboard([
+    { label: "Создать новое сообщение", color: "positive", payload: { action: ACTIONS.MESSAGE_CREATE } },
+    ...messageButtons.map((messageButton) => ({
+      label: messageButton.label,
+      color: "primary",
+      payload: {
+        action: ACTIONS.MESSAGE_OPEN,
+        messageId: messageButton.id,
       },
-    ]),
-    [{ label: "Назад", color: "secondary", payload: { action: ACTIONS.BACK_TO_ADMIN_MENU } }],
+    })),
+    { label: "Назад", color: "secondary", payload: { action: ACTIONS.BACK_TO_ADMIN_MENU } },
   ]);
 }
 
 export function createMessageTriggerKeyboard(model = {}) {
   const triggerButtons = Array.isArray(model.buttons) ? model.buttons : [];
-  const rows = [
-    ...triggerButtons.map((button) => [
-      {
-        label: button.label,
-        color: button.color ?? "primary",
-        payload: button.payload ?? {
-          action: ACTIONS.MESSAGE_TRIGGER_SELECT,
-          triggerType: button.triggerType,
-          stationId: button.stationId ?? null,
-          title: button.title,
-        },
+  const rows = layoutMenuButtons(
+    triggerButtons.map((button) => ({
+      label: button.label,
+      color: button.color ?? "primary",
+      payload: button.payload ?? {
+        action: ACTIONS.MESSAGE_TRIGGER_SELECT,
+        triggerType: button.triggerType,
+        stationId: button.stationId ?? null,
+        title: button.title,
       },
-    ]),
-  ];
+    })),
+    {
+      layoutCount: triggerButtons.length + (Number.isInteger(model.previousPage) ? 1 : 0) + (Number.isInteger(model.nextPage) ? 1 : 0) + 1,
+    },
+  );
 
   const navigationButtons = [];
 

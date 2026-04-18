@@ -9,6 +9,7 @@ import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
   ADMIN_MENU_WELCOME_MESSAGE,
   BOT_START_MESSAGE,
+  BOT_START_MENU_HINT,
   sendAdminStationChoiceScreen,
   sendAskAdminPasswordScreen,
   sendInvalidAdminStationScreen,
@@ -160,11 +161,11 @@ async function sendStartTemplateOrFallback(env, vk, peerId) {
   const template = await getMessageByTrigger(env, MESSAGE_TRIGGER_TYPES.BOT_START, null);
 
   if (template?.content_items?.length) {
-    await sendTemplateSequence(vk, peerId, template.content_items);
+    await sendTemplateSequence(vk, peerId, appendStartMenuHint(template.content_items));
     return;
   }
 
-  await vk.sendText(peerId, BOT_START_MESSAGE);
+  await vk.sendText(peerId, `${BOT_START_MESSAGE}\n\n${BOT_START_MENU_HINT}`);
 }
 
 async function sendParticipantTemplateOrFallback(env, vk, peerId) {
@@ -183,4 +184,18 @@ async function sendParticipantTemplateOrFallback(env, vk, peerId) {
 async function findTeamByIdFromList(env, teamId) {
   const teams = await getTeams(env);
   return teams.find((team) => Number(team.id) === Number(teamId)) ?? null;
+}
+
+function appendStartMenuHint(contentItems) {
+  const items = Array.isArray(contentItems) ? contentItems.map((item) => ({ ...item })) : [];
+
+  if (!items.length) {
+    return [{ text: BOT_START_MENU_HINT, attachments: [] }];
+  }
+
+  const lastItem = items.at(-1);
+  const lastText = typeof lastItem?.text === "string" ? lastItem.text.trimEnd() : "";
+  lastItem.text = lastText ? `${lastText}\n\n${BOT_START_MENU_HINT}` : BOT_START_MENU_HINT;
+
+  return items;
 }

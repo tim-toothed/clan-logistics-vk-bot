@@ -159,7 +159,7 @@ export async function listStationMessageTriggerOptions(env) {
     triggerType: MESSAGE_TRIGGER_TYPES.GO_TO_STATION,
     stationId: station.id,
     title: `Для перехода на станцию ${station.station_name}`,
-    label: `Для перехода на станцию ${station.station_name}`,
+    label: buildStationTriggerButtonLabel(station.station_name),
   }));
 }
 
@@ -207,6 +207,16 @@ function buildDisplayTitle(row) {
   }
 
   return row.title;
+}
+
+function buildStationTriggerButtonLabel(stationName) {
+  const normalizedName = String(stationName ?? "").trim() || "Без названия";
+
+  if (normalizedName.length <= 40) {
+    return normalizedName;
+  }
+
+  return `${normalizedName.slice(0, 37).trimEnd()}...`;
 }
 
 function safeParseJson(value) {

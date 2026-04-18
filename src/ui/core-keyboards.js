@@ -1,9 +1,11 @@
 function createRichTextButton(button) {
+  const normalizedLabel = normalizeVkButtonLabel(button.label);
+
   return {
     action: {
       type: "text",
-      label: button.label,
-      payload: JSON.stringify(button.payload ?? { label: button.label }),
+      label: normalizedLabel,
+      payload: JSON.stringify(button.payload ?? { label: normalizedLabel }),
     },
     color: button.color ?? "secondary",
   };
@@ -30,4 +32,15 @@ export function createButtonsKeyboard(buttons, options = {}) {
 
 export function createBackKeyboard() {
   return createKeyboard([[{ label: "Назад", color: "secondary" }]], { oneTime: true });
+}
+
+function normalizeVkButtonLabel(label) {
+  const normalizedLabel = String(label ?? "").trim() || "Кнопка";
+  const characters = Array.from(normalizedLabel);
+
+  if (characters.length <= 40) {
+    return normalizedLabel;
+  }
+
+  return `${characters.slice(0, 37).join("").trimEnd()}...`;
 }

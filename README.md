@@ -1,72 +1,90 @@
-# clan-logistics-vk-bot
+# Clan Logistics VK Bot
 
-VK bot for quest logistics on Cloudflare Workers.
+Бот для ВКонтакте, который помогает проводить квест или мероприятие со станциями и командами:
 
-The project has been reorganized from a command-first template into a UI-first architecture. The bot works through buttons and user state, so the codebase is now structured around screens, feature modules, and routing by `payload.action` / `state_type`.
+- участники выбирают свою команду;
+- организаторы на станциях запускают и завершают прохождение;
+- бот сам отправляет участникам сообщения, куда идти дальше;
+- если свободных станций нет, бот отправляет сообщение ожидания;
+- администратор может заранее заполнить команды, станции и шаблоны сообщений.
 
-## Current structure
+Проект рассчитан на запуск в `Cloudflare Workers`. Это самый простой путь для самостоятельного запуска: отдельный VPS или собственный backend-сервер не нужны.
 
-- `src/main.js`
-  Worker entrypoint. Delegates VK updates into the application layer.
-- `src/app/*`
-  Application orchestration:
-  - `handle-update.js` handles VK callback requests
-  - `create-context.js` builds the shared flow context
-  - `ui-router.js` routes commands, UI actions, and user states
-  - `action-types.js` / `state-types.js` store shared constants
-- `src/modules/*`
-  Feature-oriented UI modules. The first extracted modules are:
-  - `welcome`
-  - `admin-home`
-  - `my-station`
-  - `setup-lists`
-  - `message-templates`
-  - `status`
-  - `reset`
-- `src/ui/core-keyboards.js`
-  Shared VK keyboard primitives used by feature modules.
-- `src/db/*`
-  D1 repositories and database access.
-- `src/utils/*`
-  VK-specific helpers and text utilities.
+## Что умеет бот
 
-## Migration direction
+- разделяет роли на участника и организатора;
+- работает через кнопки и состояния диалога, а не через набор команд;
+- хранит данные в `Cloudflare D1`;
+- показывает сводку по станциям в разделе `Статистика`;
+- умеет делать сброс мероприятия с backup-файлом;
+- умеет восстанавливать данные из backup-файла через скрытую команду `/import`.
 
-The architecture is feature-first rather than command-first:
+## Кому подойдёт этот проект
 
-- welcome
-- admin-home
-- setup-lists
-- message-templates
-- my-station
-- status
-- reset
+Этот репозиторий подойдёт, если вы хотите:
 
-## Local setup
+- запустить такого же VK-бота для своего мероприятия;
+- не писать всё с нуля;
+- поменять тексты, названия станций и сценарии под себя.
 
-1. Install dependencies:
+Если вы не очень технически подкованы, ориентируйтесь на разделы ниже: там дан упрощённый порядок запуска. Подробности по логике бота вынесены в документацию.
+
+## Что нужно заранее
+
+Перед запуском подготовьте:
+
+1. сообщество ВКонтакте, от имени которого будет работать бот;
+2. включённые сообщения сообщества;
+3. токен сообщества VK с доступом к сообщениям;
+4. аккаунт Cloudflare;
+5. установленный `Node.js`;
+6. установленный `Wrangler` или готовность запускать его через `npx`.
+
+## Быстрый запуск своего бота
+
+### 1. Скачайте проект и установите зависимости
 
 ```bash
 npm install
 ```
 
-2. Copy `.dev.vars.example` to `.dev.vars` and fill in your VK values.
+### 2. Подготовьте локальные переменные
 
-3. Start local dev mode:
+Скопируйте файл `.dev.vars.example` в `.dev.vars`.
 
-```bash
-npm run dev
+Пример содержимого:
+
+```env
+VK_GROUP_TOKEN=ваш_токен_сообщества
+VK_CONFIRMATION_TOKEN=код_подтверждения_из_VK
+VK_SECRET=секрет_callback_api
+ADMIN_PASSWORD=пароль_для_организаторов
 ```
 
-4. Run syntax checks:
+Эти значения нужны так:
+
+- `VK_GROUP_TOKEN` — бот сможет отправлять сообщения от имени сообщества;
+- `VK_CONFIRMATION_TOKEN` — нужен для подтверждения callback-адреса в VK;
+- `VK_SECRET` — защита callback-запросов;
+- `ADMIN_PASSWORD` — пароль входа для организаторов.
+
+### 3. Создайте базу D1
+
+Если база ещё не создана, создайте её в Cloudflare:
 
 ```bash
-npm run check
+npx wrangler d1 create clan-logistics-vk-bot-db
 ```
 
-## Cloudflare setup
+После этого подставьте выданный `database_id` в [wrangler.jsonc](./wrangler.jsonc).
 
-Set secrets in the Worker:
+### 4. Примените миграцию
+
+```bash
+npx wrangler d1 execute clan-logistics-vk-bot-db --remote --file=./migrations/0001_init.sql
+```
+
+### 5. Добавьте секреты в Worker
 
 ```bash
 npx wrangler secret put VK_GROUP_TOKEN
@@ -75,18 +93,115 @@ npx wrangler secret put VK_SECRET
 npx wrangler secret put ADMIN_PASSWORD
 ```
 
-`VK_API_VERSION` is stored in `wrangler.jsonc` as a regular variable.
+`VK_API_VERSION` уже хранится в [wrangler.jsonc](./wrangler.jsonc) как обычная переменная.
 
-To validate the Worker bundle before deploy, run:
+### 6. Задеплойте бота
 
 ```bash
-npx wrangler deploy --dry-run --outdir dist
+npx wrangler deploy
 ```
 
-## VK callback setup
+После деплоя Cloudflare даст URL вашего Worker.
 
-1. Create a community token with message access.
-2. Enable Community Messages and Callback API in VK.
-3. Set the Worker URL as the callback endpoint.
-4. Copy the confirmation code and callback secret into Worker secrets.
-5. Subscribe to at least `message_new`.
+### 7. Подключите callback в VK
+
+В настройках сообщества ВКонтакте:
+
+1. включите `Сообщения сообщества`;
+2. включите `Бота`;
+3. откройте `Callback API`;
+4. укажите URL вашего Worker;
+5. укажите тот же `VK_SECRET`, что вы добавили в Worker;
+6. подпишитесь как минимум на событие `message_new`.
+
+После этого VK попросит подтверждение адреса. Бот вернёт `VK_CONFIRMATION_TOKEN`, и callback станет активным.
+
+## Как проверить локально
+
+Для локального запуска:
+
+```bash
+npm run dev
+```
+
+Для быстрой проверки синтаксиса:
+
+```bash
+npm run check
+```
+
+## Где менять настройки под своё мероприятие
+
+После запуска большинство данных можно менять прямо через интерфейс бота:
+
+- список команд;
+- список станций;
+- тексты и шаблоны сообщений;
+- приветственные сообщения;
+- сообщения перехода на конкретные станции;
+- сообщение ожидания;
+- финальное сообщение после последней станции.
+
+То есть под многие мероприятия код вообще не нужно менять — достаточно настроить данные через админское меню.
+
+## Структура проекта
+
+Проект организован по feature-first схеме:
+
+- `src/main.js`
+  Точка входа Worker.
+- `src/app/*`
+  Общая маршрутизация событий, действий и состояний.
+- `src/modules/*`
+  UI-модули бота:
+  - `welcome`
+  - `admin-home`
+  - `my-station`
+  - `setup-lists`
+  - `message-templates`
+  - `status`
+  - `reset`
+- `src/db/*`
+  Работа с D1.
+- `src/ui/*`
+  Общие клавиатуры и UI-примитивы.
+- `src/utils/*`
+  Вспомогательные функции для VK и текста.
+- `src/documentation/*`
+  Подробная документация по логике и навигации.
+
+## Документация
+
+Подробности вынесены отдельно:
+
+- [План реализации](./src/documentation/IMPLEMENTATION_PLAN.md)
+- [Навигация и UI](./src/documentation/UI_NAVIGATION.md)
+
+Если вам нужно понять:
+
+- как устроены состояния и таблицы;
+- как выбирается следующая станция;
+- что видит участник и админ;
+- как работает сброс и импорт;
+
+начинайте именно с этих файлов.
+
+## Важные замечания
+
+- Бот рассчитан именно на `Cloudflare Workers + D1`.
+- Полностью “нулевой” экран со стандартной кнопкой `Start` контролируется самим VK и зависит от того, был ли у пользователя диалог с сообществом раньше.
+- Команда `/import` скрытая и доступна только администраторам.
+- Backup при сбросе отправляется как файл экспорта мероприятия.
+
+## Что уже проверено
+
+В проекте уже прогонялись сценарии:
+
+- маршрутизация команд по станциям;
+- выбор самой давно простаивающей свободной станции;
+- переход команды в `waiting_station`;
+- завершение маршрута команды;
+- завершение станции для всех команд;
+- автоматический тестовый сценарий доставки сообщений участнику.
+
+Если вы запускаете проект под своё мероприятие, всё равно стоит отдельно проверить сценарии на реальных аккаунтах VK: участник, организатор станции и администратор.

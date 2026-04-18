@@ -22,7 +22,7 @@ import {
   handleStartCommand,
   handleWrongRoleSelection,
 } from "../modules/welcome/router.js";
-import { handleResetConfirmState, openResetConfirm } from "../modules/reset/router.js";
+import { handleImportCommand, handleImportWaitFileState, handleResetConfirmState, openResetConfirm } from "../modules/reset/router.js";
 import { handleStationsListState, handleStationsTeamsMenuState, handleTeamsListState, openStationsTeamsMenu } from "../modules/setup-lists/router.js";
 import { handleStatusViewState, openStatusScreen } from "../modules/status/router.js";
 import { sendWhoAreYouScreen } from "../modules/welcome/screens.js";
@@ -50,6 +50,7 @@ const stateHandlers = {
   [STATE_TYPES.MESSAGE_RECORDING]: handleMessageRecordingState,
   [STATE_TYPES.MESSAGE_TEMPLATE_ACTIONS]: handleMessageTemplateActionsState,
   [STATE_TYPES.RESET_CONFIRM]: handleResetConfirmState,
+  [STATE_TYPES.IMPORT_WAIT_FILE]: handleImportWaitFileState,
   [STATE_TYPES.PARTICIPANT_HOME]: handleParticipantHomeState,
 };
 
@@ -63,6 +64,7 @@ const directInputHandlers = {
 const textCommandHandlers = {
   start: handleStartCommand,
   help: handleHelpCommand,
+  import: handleImportCommand,
 };
 
 export async function handleMessageNew(env, payload, state, vk, ctx) {

@@ -40,52 +40,75 @@ async function buildStatusSummary(env) {
     const currentTeam = station.current_team_id ? await getTeamById(env, station.current_team_id) : null;
     const admins = await listAdminLabelsByStation(env, station.id);
     const completedCount = Number(station.completed_teams_count ?? 0);
-    const avgDuration = formatDuration(station.avg_duration_seconds);
-    const timesList = durations.length ? durations.map((item) => formatDuration(item.duration_seconds)).join(", ") : "нет данных";
     const remainingCount = Math.max(0, totalTeams - completedCount);
-    const currentTeamLine = currentTeam ? currentTeam.team_name : "нет";
+    const durationSummary = formatDurationSummary(station.avg_duration_seconds, durations);
 
     sections.push(
-      [
-        station.station_name,
-        `Статус: ${formatStationStatus(station.status)}`,
-        `Текущая команда: ${currentTeamLine}`,
-        `Организаторы: ${admins.length ? admins.join(", ") : "не назначены"}`,
-        `Осталось команд: ${remainingCount}`,
-        `Среднее время: ${avgDuration}`,
-        `Все времена: ${timesList}`,
-      ].join("\n"),
+      buildStationSection({
+        stationName: station.station_name,
+        status: station.status,
+        currentTeamName: currentTeam?.team_name ?? null,
+        admins,
+        remainingCount,
+        totalTeams,
+        durationSummary,
+      }),
     );
   }
 
   return [
-    "Положение дел",
-    `Обновлено: ${new Date().toLocaleString("ru-RU")}`,
-    `Станций: ${stations.length}`,
-    `Команд: ${totalTeams}`,
-    "",
+    "**Статистика**",
     sections.join("\n\n--------------------\n\n"),
   ].join("\n");
 }
 
-function formatStationStatus(status) {
+function buildStationSection({ stationName, status, currentTeamName, admins, remainingCount, totalTeams, durationSummary }) {
+  const lines = [`${stationName}${formatStationStatusEmoji(status)}`];
+
+  if (status === "occupied" && currentTeamName) {
+    lines.push(`Текущая команда: ${currentTeamName}`);
+  }
+
+  lines.push(`Организаторы: ${admins.length ? admins.join(", ") : "не назначены"}`);
+  lines.push(`Осталось команд: ${remainingCount}/${totalTeams}`);
+  lines.push(`Среднее время: ${durationSummary}`);
+
+  return lines.join("\n");
+}
+
+function formatStationStatusEmoji(status) {
   switch (status) {
     case "occupied":
-      return "занята";
+      return "🔴";
     case "done":
-      return "завершена";
+      return "💯";
     default:
-      return "свободна";
+      return "🟢";
   }
 }
 
-function formatDuration(value) {
-  if (!value && value !== 0) {
+function formatDurationSummary(avgDurationSeconds, durations) {
+  const roundedValues = durations
+    .map((item) => roundDurationMinutes(item.duration_seconds))
+    .filter((value) => value !== null);
+  const roundedAverage = roundDurationMinutes(avgDurationSeconds);
+
+  if (roundedAverage === null) {
     return "нет данных";
   }
 
-  const totalSeconds = Math.max(0, Math.round(Number(value)));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}м ${seconds}с`;
+  if (!roundedValues.length) {
+    return `${roundedAverage} мин`;
+  }
+
+  return `${roundedAverage} мин (${roundedValues.join(" | ")} мин)`;
+}
+
+function roundDurationMinutes(value) {
+  if (!value && value !== 0) {
+    return null;
+  }
+
+  const totalSeconds = Math.max(0, Number(value));
+  return Math.round(totalSeconds / 60);
 }

@@ -5,7 +5,7 @@ export function createAdminMenuKeyboard() {
   return createKeyboard([
     [
       { label: "Моя станция", color: "primary", payload: { action: ACTIONS.OPEN_MY_STATION } },
-      { label: "Положение дел", color: "primary", payload: { action: ACTIONS.OPEN_STATUS } },
+      { label: "Статистика", color: "primary", payload: { action: ACTIONS.OPEN_STATUS } },
     ],
     [
       { label: "Станции и команды", color: "primary", payload: { action: ACTIONS.OPEN_STATIONS_TEAMS } },

@@ -14,5 +14,6 @@ export const STATE_TYPES = Object.freeze({
   MESSAGE_RECORDING: "message_recording",
   MESSAGE_TEMPLATE_ACTIONS: "message_template_actions",
   RESET_CONFIRM: "reset_confirm",
+  IMPORT_WAIT_FILE: "import_wait_file",
   PARTICIPANT_HOME: "participant_home",
 });

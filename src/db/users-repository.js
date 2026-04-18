@@ -143,6 +143,20 @@ export async function listAdminPeerIdsByStation(env, stationId) {
   return rows.map((row) => Number(row.vk_user_id)).filter(Boolean);
 }
 
+export async function listAllAdminPeerIds(env) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT DISTINCT vk_user_id
+      FROM users
+      WHERE is_admin = 1
+      ORDER BY id ASC
+    `,
+  );
+
+  return rows.map((row) => Number(row.vk_user_id)).filter(Boolean);
+}
+
 export async function listAdminLabelsByStation(env, stationId) {
   const rows = await dbAll(
     env,

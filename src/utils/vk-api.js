@@ -43,6 +43,49 @@ export function createVkClient(env) {
         version: apiVersion,
       });
     },
+
+    async uploadMessageDocument(peerId, fileName, fileContents, contentType = "application/json") {
+      const uploadServer = await callVkApi({
+        method: "docs.getMessagesUploadServer",
+        params: {
+          peer_id: peerId,
+        },
+        token: env.VK_GROUP_TOKEN,
+        version: apiVersion,
+      });
+
+      const formData = new FormData();
+      const fileBlob = new Blob([fileContents], { type: contentType });
+
+      formData.set("file", fileBlob, fileName);
+
+      const uploadResponse = await fetch(uploadServer.upload_url, {
+        method: "POST",
+        body: formData,
+      });
+      const uploadData = await uploadResponse.json();
+
+      if (!uploadResponse.ok || uploadData?.error) {
+        throw new Error("Не удалось загрузить файл экспорта в VK.");
+      }
+
+      const savedDocs = await callVkApi({
+        method: "docs.save",
+        params: {
+          file: uploadData.file,
+          title: fileName,
+        },
+        token: env.VK_GROUP_TOKEN,
+        version: apiVersion,
+      });
+      const savedDoc = Array.isArray(savedDocs) ? savedDocs[0] : null;
+
+      if (!savedDoc?.owner_id || !savedDoc?.id) {
+        throw new Error("VK не вернул данные сохраненного документа.");
+      }
+
+      return buildVkAttachmentString("doc", savedDoc.owner_id, savedDoc.id, savedDoc.access_key);
+    },
   };
 }
 
@@ -110,6 +153,11 @@ function createRandomId() {
   const array = new Uint32Array(1);
   crypto.getRandomValues(array);
   return array[0];
+}
+
+function buildVkAttachmentString(type, ownerId, itemId, accessKey) {
+  const suffix = accessKey ? `_${accessKey}` : "";
+  return `${type}${ownerId}_${itemId}${suffix}`;
 }
 
 function formatVkApiError(method, status, error) {

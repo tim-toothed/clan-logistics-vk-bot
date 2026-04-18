@@ -10,7 +10,7 @@ export const MESSAGE_TRIGGER_TYPES = {
 
 export async function getMessageByTrigger(env, triggerType, stationId = null) {
   if (stationId === null) {
-    return dbFirst(
+    const row = await dbFirst(
       env,
       `
         SELECT *
@@ -23,9 +23,11 @@ export async function getMessageByTrigger(env, triggerType, stationId = null) {
       `,
       [triggerType],
     );
+
+    return row ? normalizeMessageRow(row) : null;
   }
 
-  return dbFirst(
+  const row = await dbFirst(
     env,
     `
       SELECT *
@@ -38,6 +40,8 @@ export async function getMessageByTrigger(env, triggerType, stationId = null) {
     `,
     [triggerType, stationId],
   );
+
+  return row ? normalizeMessageRow(row) : null;
 }
 
 export async function listMessagesForMenu(env) {
@@ -146,8 +150,8 @@ export function listBaseMessageTriggerOptions() {
     {
       triggerType: MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL,
       stationId: null,
-      title: "После прохождения станций",
-      label: "После прохождения станций",
+      title: "После последней станции",
+      label: "После последней станции",
     },
   ];
 }
@@ -158,8 +162,8 @@ export async function listStationMessageTriggerOptions(env) {
   return stations.map((station) => ({
     triggerType: MESSAGE_TRIGGER_TYPES.GO_TO_STATION,
     stationId: station.id,
-    title: `Для перехода на станцию ${station.station_name}`,
-    label: `Для перехода на станцию ${station.station_name}`,
+    title: `Переход на "${station.station_name}"`,
+    label: `Переход на "${station.station_name}"`,
   }));
 }
 
@@ -187,7 +191,7 @@ function normalizeMessageRow(row) {
 
 function buildDisplayTitle(row) {
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.GO_TO_STATION) {
-    return row.station_name ? `Для перехода на станцию ${row.station_name}` : "Для перехода на станцию !ERROR!";
+    return row.station_name ? `Переход на "${row.station_name}"` : 'Переход на "!ERROR!"';
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.BOT_START) {
@@ -203,7 +207,7 @@ function buildDisplayTitle(row) {
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL) {
-    return "После прохождения станций";
+    return "После последней станции";
   }
 
   return row.title;

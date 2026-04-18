@@ -235,7 +235,7 @@ async function buildTriggerMenuScreenModel(env, payload) {
   const rootButtons = listBaseMessageTriggerOptions().map((option) => ({ ...option }));
 
   rootButtons.splice(3, 0, {
-    label: "Для перехода на станцию",
+    label: "Переход на станцию",
     color: "primary",
     payload: { action: ACTIONS.MESSAGE_TRIGGER_STATIONS },
   });

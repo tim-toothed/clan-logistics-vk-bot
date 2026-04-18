@@ -78,7 +78,7 @@ export function createVkClient(env) {
         token: env.VK_GROUP_TOKEN,
         version: apiVersion,
       });
-      const savedDoc = Array.isArray(savedDocs) ? savedDocs[0] : null;
+      const savedDoc = resolveSavedVkDocument(savedDocs);
 
       if (!savedDoc?.owner_id || !savedDoc?.id) {
         throw new Error("VK не вернул данные сохраненного документа.");
@@ -158,6 +158,24 @@ function createRandomId() {
 function buildVkAttachmentString(type, ownerId, itemId, accessKey) {
   const suffix = accessKey ? `_${accessKey}` : "";
   return `${type}${ownerId}_${itemId}${suffix}`;
+}
+
+function resolveSavedVkDocument(savedDocs) {
+  const firstItem = Array.isArray(savedDocs) ? savedDocs[0] : savedDocs;
+
+  if (!firstItem || typeof firstItem !== "object") {
+    return null;
+  }
+
+  if (firstItem.doc && typeof firstItem.doc === "object") {
+    return firstItem.doc;
+  }
+
+  if (firstItem.audio_message && typeof firstItem.audio_message === "object") {
+    return firstItem.audio_message;
+  }
+
+  return firstItem;
 }
 
 function formatVkApiError(method, status, error) {

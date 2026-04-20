@@ -67,7 +67,10 @@ export async function replaceStations(env, stationDefinitions) {
     const currentStation = existingStations[index];
 
     if (currentStation) {
-      if (currentStation.station_name !== stationName || Number(currentStation.not_first ?? 0) !== notFirst) {
+      if (
+        currentStation.station_name !== stationName ||
+        Number(currentStation.not_first ?? 0) !== notFirst
+      ) {
         statements.push({
           sql: "UPDATE stations SET station_name = ?, not_first = ? WHERE id = ?",
           bindings: [stationName, notFirst, currentStation.id],
@@ -83,10 +86,19 @@ export async function replaceStations(env, stationDefinitions) {
     });
   }
 
-  for (const station of existingStations.slice(stationNames.length)) {
-    statements.push({ sql: "UPDATE users SET station_id = NULL WHERE station_id = ?", bindings: [station.id] });
-    statements.push({ sql: "UPDATE teams SET current_station_id = NULL WHERE current_station_id = ?", bindings: [station.id] });
-    statements.push({ sql: "DELETE FROM stations WHERE id = ?", bindings: [station.id] });
+  for (const station of existingStations.slice(stationDefinitions.length)) {
+    statements.push({
+      sql: "UPDATE users SET station_id = NULL WHERE station_id = ?",
+      bindings: [station.id],
+    });
+    statements.push({
+      sql: "UPDATE teams SET current_station_id = NULL WHERE current_station_id = ?",
+      bindings: [station.id],
+    });
+    statements.push({
+      sql: "DELETE FROM stations WHERE id = ?",
+      bindings: [station.id],
+    });
   }
 
   if (!statements.length) {

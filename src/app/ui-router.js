@@ -28,12 +28,14 @@ import { handleStationsListState, handleStationsTeamsMenuState, handleTeamsListS
 import { handleStatusViewState, openStatusScreen } from "../modules/status/router.js";
 import { sendWhoAreYouScreen } from "../modules/welcome/screens.js";
 
+// Все эти /u - это русские слова в Unicode, потому что Codex постоянно теряется из-за UTF-8
 const INPUT_PARTICIPANT = "\u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a";
 const INPUT_ORGANIZER = "\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440";
 const INPUT_ADMIN = "\u0430\u0434\u043c\u0438\u043d";
 const INPUT_WRONG_ROLE = "\u043f\u0435\u0440\u0435\u043f\u0443\u0442\u0430\u043b, \u044f \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440";
 const INPUT_BACK = "\u043d\u0430\u0437\u0430\u0434";
 const INPUT_EXIT = "\u0432\u044b\u0439\u0442\u0438";
+const INPUT_START_VK = "\u043d\u0430\u0447\u0430\u0442\u044c";
 const ADMIN_ONLY_ACTIONS = new Set([
   ACTIONS.OPEN_MY_STATION,
   ACTIONS.OPEN_STATUS,
@@ -88,6 +90,9 @@ const textCommandHandlers = {
   start: handleStartCommand,
   help: handleHelpCommand,
   import: handleImportCommand,
+};
+const textCommandAliases = {
+  [INPUT_START_VK]: "start",
 };
 
 export async function handleMessageNew(env, payload, state, vk, ctx) {
@@ -172,7 +177,8 @@ function findTextCommandHandler(input) {
   }
 
   const normalizedInput = normalizeCommandInput(input);
-  const commandName = Object.keys(textCommandHandlers).find((command) => normalizedInput.startsWith(command));
+  const resolvedCommand = textCommandAliases[normalizedInput] ?? normalizedInput;
+  const commandName = Object.keys(textCommandHandlers).find((command) => resolvedCommand.startsWith(command));
 
   return commandName ? textCommandHandlers[commandName] : null;
 }

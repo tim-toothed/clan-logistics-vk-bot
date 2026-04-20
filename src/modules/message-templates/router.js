@@ -46,7 +46,7 @@ export async function openBotMessagesMenu(context) {
 export async function handleBotMessagesMenuState(context) {
   if (context.action === ACTIONS.BACK_TO_ADMIN_MENU || context.input === "назад") {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
   }
 

@@ -11,11 +11,11 @@ export async function findTeamByName(env, teamName) {
 }
 
 export async function getStations(env) {
-  return dbAll(env, "SELECT id, station_name FROM stations ORDER BY id ASC");
+  return dbAll(env, "SELECT id, station_name, not_first FROM stations ORDER BY id ASC");
 }
 
 export async function findStationByName(env, stationName) {
-  return dbFirst(env, "SELECT id, station_name FROM stations WHERE lower(station_name) = lower(?)", [
+  return dbFirst(env, "SELECT id, station_name, not_first FROM stations WHERE lower(station_name) = lower(?)", [
     String(stationName ?? "").trim(),
   ]);
 }
@@ -57,18 +57,20 @@ export async function replaceTeams(env, teamNames) {
   await dbBatch(env, statements);
 }
 
-export async function replaceStations(env, stationNames) {
+export async function replaceStations(env, stationDefinitions) {
   const existingStations = await getStations(env);
   const statements = [];
 
-  for (const [index, stationName] of stationNames.entries()) {
+  for (const [index, stationDefinition] of stationDefinitions.entries()) {
+    const stationName = stationDefinition.station_name;
+    const notFirst = stationDefinition.not_first ? 1 : 0;
     const currentStation = existingStations[index];
 
     if (currentStation) {
-      if (currentStation.station_name !== stationName) {
+      if (currentStation.station_name !== stationName || Number(currentStation.not_first ?? 0) !== notFirst) {
         statements.push({
-          sql: "UPDATE stations SET station_name = ? WHERE id = ?",
-          bindings: [stationName, currentStation.id],
+          sql: "UPDATE stations SET station_name = ?, not_first = ? WHERE id = ?",
+          bindings: [stationName, notFirst, currentStation.id],
         });
       }
 
@@ -76,8 +78,8 @@ export async function replaceStations(env, stationNames) {
     }
 
     statements.push({
-      sql: "INSERT INTO stations (station_name) VALUES (?)",
-      bindings: [stationName],
+      sql: "INSERT INTO stations (station_name, not_first) VALUES (?, ?)",
+      bindings: [stationName, notFirst],
     });
   }
 
@@ -92,4 +94,44 @@ export async function replaceStations(env, stationNames) {
   }
 
   await dbBatch(env, statements);
+}
+
+export function parseStationDefinitions(stationNames) {
+  if (!Array.isArray(stationNames) || !stationNames.length) {
+    return null;
+  }
+
+  const definitions = [];
+
+  for (const rawStationName of stationNames) {
+    const normalizedStationName = String(rawStationName ?? "").trim();
+
+    if (!normalizedStationName) {
+      return null;
+    }
+
+    const notFirst = normalizedStationName.endsWith("*");
+    const stationName = notFirst ? normalizedStationName.slice(0, -1).trimEnd() : normalizedStationName;
+
+    if (!stationName) {
+      return null;
+    }
+
+    definitions.push({
+      station_name: stationName,
+      not_first: notFirst ? 1 : 0,
+    });
+  }
+
+  return definitions;
+}
+
+export function formatStationDefinitions(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return "отсутствует";
+  }
+
+  return rows
+    .map((row, index) => `${index + 1}. ${row.station_name}${Number(row.not_first ?? 0) ? "*" : ""}`)
+    .join("\n");
 }

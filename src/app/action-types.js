@@ -1,5 +1,6 @@
 export const ACTIONS = Object.freeze({
   EXIT: "exit",
+  OPEN_ASSIGN_TEAMS: "open_assign_teams",
   OPEN_MY_STATION: "open_my_station",
   OPEN_STATUS: "open_status",
   OPEN_BOT_MESSAGES: "open_bot_messages",
@@ -10,6 +11,8 @@ export const ACTIONS = Object.freeze({
   PARTICIPANT_TEAM_SELECT: "participant_team_select",
   STATION_TEAM_SELECT: "station_team_select",
   STATION_FINISH: "station_finish",
+  STATION_FINISH_CONFIRM: "station_finish_confirm",
+  STATION_FINISH_CANCEL: "station_finish_cancel",
   STATION_FORCE_FINISH: "station_force_finish",
   MESSAGE_CREATE: "message_create",
   MESSAGE_OPEN: "message_open",
@@ -21,5 +24,10 @@ export const ACTIONS = Object.freeze({
   MESSAGE_REPLACE: "message_replace",
   MESSAGE_DELETE: "message_delete",
   MESSAGES_MENU_BACK: "messages_menu_back",
-  RESET_CONFIRM: "reset_confirm",
+  OPEN_RESET_ACTIVITY_HISTORY: "open_reset_activity_history",
+  OPEN_RESET_ALL_DATA: "open_reset_all_data",
+  RESET_CONFIRM_ACTIVITY_HISTORY: "reset_confirm_activity_history",
+  RESET_CONFIRM_ALL_DATA: "reset_confirm_all_data",
+  ASSIGN_TEAMS_CONFIRM: "assign_teams_confirm",
+  ASSIGN_TEAMS_RETRY_FAILED: "assign_teams_retry_failed",
 });

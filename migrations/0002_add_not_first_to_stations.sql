@@ -1,0 +1,1 @@
+ALTER TABLE stations ADD COLUMN not_first INTEGER NOT NULL DEFAULT 0 CHECK (not_first IN (0, 1));

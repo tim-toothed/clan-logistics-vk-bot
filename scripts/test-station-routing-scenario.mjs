@@ -12,6 +12,7 @@ import {
   hasTeamCompletedAllStations,
   setTeamStatus,
   startStationForTeam,
+  transitionTeamToNextStation,
 } from "../src/db/events-repository.js";
 
 const MIGRATION_SQL = readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8");
@@ -25,6 +26,7 @@ async function main() {
   scenarioResults.push(await testTeamFinishedFlow());
   scenarioResults.push(await testStationDoneFlow());
   scenarioResults.push(await testWaitingTeamsReceiveDifferentFreedStations());
+  scenarioResults.push(await testAutomaticStartAfterStationAssignment());
 
   for (const result of scenarioResults) {
     console.log(`PASS ${result.name}`);
@@ -297,6 +299,57 @@ async function testWaitingTeamsReceiveDifferentFreedStations() {
   return {
     name: "4.3 waiting teams do not receive duplicate freed stations",
     details: assignments.map((assignment) => `${assignment.teamName} -> ${assignment.stationName}`),
+  };
+}
+
+async function testAutomaticStartAfterStationAssignment() {
+  const env = createTestEnv();
+  await seedUsersTeamsStations(env, 2, 2);
+
+  await startStationForTeam(env, {
+    stationId: 1,
+    teamId: 1,
+    startedByUserId: 1,
+    startTime: "2026-04-18T10:00:00.000Z",
+  });
+
+  const activeEvent = await getActiveEventForStation(env, 1);
+
+  if (!activeEvent?.id) {
+    throw new Error("Не удалось создать активное событие для станции 1.");
+  }
+
+  await transitionTeamToNextStation(env, {
+    eventId: activeEvent.id,
+    stationId: 1,
+    teamId: 1,
+    nextStationId: 2,
+    endedByUserId: 1,
+    endTime: "2026-04-18T10:15:00.000Z",
+    stationDone: false,
+    startTime: "2026-04-18T10:15:00.000Z",
+  });
+
+  const previousStation = await getStationById(env, 1);
+  const nextStation = await getStationById(env, 2);
+  const team = await getTeamById(env, 1);
+  const nextActiveEvent = await getActiveEventForStation(env, 2);
+
+  assertEqual(previousStation?.status, "free", "Предыдущая станция должна освободиться после перехода команды дальше.");
+  assertEqual(previousStation?.current_team_id, null, "У предыдущей станции не должно остаться current_team_id.");
+  assertEqual(nextStation?.status, "occupied", "Следующая станция должна сразу стать occupied при назначении команды.");
+  assertEqual(nextStation?.current_team_id, 1, "Следующая станция должна быть занята именно этой командой.");
+  assertEqual(team?.status, "on_station", "Команда должна сразу перейти в статус on_station.");
+  assertEqual(team?.current_station_id, 2, "У команды должна сразу записываться новая станция.");
+  assertEqual(nextActiveEvent?.team_id, 1, "На новой станции должно сразу создаваться active-событие для команды.");
+
+  return {
+    name: "4.1 automatic start when team is assigned to next station",
+    details: [
+      `Станция 1 после перехода: ${previousStation?.status}`,
+      `Станция 2 после перехода: ${nextStation?.status}`,
+      `Статус команды 1: ${team?.status}`,
+    ],
   };
 }
 

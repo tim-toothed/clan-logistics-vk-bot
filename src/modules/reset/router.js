@@ -22,27 +22,64 @@ import {
   sendImportFailedScreen,
   sendResetBackupFailedScreen,
   sendResetBackupNotificationScreen,
+  sendResetCompletedScreen,
   sendResetConfirmScreen,
+  sendResetMenuScreen,
 } from "./screens.js";
 
 const BACKUP_FILE_EXTENSION = ".json.gz";
 const LEGACY_IMPORT_FILE_EXTENSION = ".json";
 
 export async function openResetConfirm(context) {
-  await setUserState(context.env, context.user.id, STATE_TYPES.RESET_CONFIRM, "confirm");
-  await sendResetConfirmScreen(context.vk, context.peerId);
+  await setUserState(context.env, context.user.id, STATE_TYPES.RESET_MENU, "menu");
+  await sendResetMenuScreen(context.vk, context.peerId);
   return true;
 }
 
 export async function handleResetConfirmState(context) {
   if (context.action === ACTIONS.BACK_TO_ADMIN_MENU || context.input === "назад") {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
   }
 
-  if (context.action !== ACTIONS.RESET_CONFIRM && context.input !== "да") {
-    await sendResetConfirmScreen(context.vk, context.peerId);
+  if (context.userState?.state_type === STATE_TYPES.RESET_MENU) {
+    if (context.action === ACTIONS.OPEN_RESET_ACTIVITY_HISTORY || context.input === "история активности") {
+      await setUserState(context.env, context.user.id, STATE_TYPES.RESET_CONFIRM, "activity_history");
+      await sendResetConfirmScreen(context.vk, context.peerId, "activity_history");
+      return true;
+    }
+
+    if (context.action === ACTIONS.OPEN_RESET_ALL_DATA || context.input === "все данные") {
+      await setUserState(context.env, context.user.id, STATE_TYPES.RESET_CONFIRM, "all_data");
+      await sendResetConfirmScreen(context.vk, context.peerId, "all_data");
+      return true;
+    }
+
+    await sendResetMenuScreen(context.vk, context.peerId);
+    return true;
+  }
+
+  if (context.action === ACTIONS.OPEN_RESET) {
+    await setUserState(context.env, context.user.id, STATE_TYPES.RESET_MENU, "menu");
+    await sendResetMenuScreen(context.vk, context.peerId);
+    return true;
+  }
+
+  if (context.userState?.step_key === "activity_history") {
+    if (context.action !== ACTIONS.RESET_CONFIRM_ACTIVITY_HISTORY && context.input !== "да") {
+      await sendResetConfirmScreen(context.vk, context.peerId, "activity_history");
+      return true;
+    }
+
+    await resetEventData(context.env);
+    await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
+    await sendResetCompletedScreen(context.vk, context.peerId, "История активности удалена. Команды, станции и сообщения сохранены.");
+    return true;
+  }
+
+  if (context.action !== ACTIONS.RESET_CONFIRM_ALL_DATA && context.input !== "да") {
+    await sendResetConfirmScreen(context.vk, context.peerId, "all_data");
     return true;
   }
 
@@ -110,7 +147,7 @@ export async function handleImportCommand(env, payload, state, vk) {
 export async function handleImportWaitFileState(context) {
   if (context.input === "назад") {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
   }
 

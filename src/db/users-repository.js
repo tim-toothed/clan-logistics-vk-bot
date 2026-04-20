@@ -224,6 +224,7 @@ export async function listParticipantUsersByTeam(env, teamId) {
   return rows
     .map((row) => ({
       peerId: Number(row.vk_user_id),
+      vkUserId: Number(row.vk_user_id),
       displayName: row.display_name || getFallbackDisplayName(row.vk_user_id),
     }))
     .filter((row) => row.peerId);

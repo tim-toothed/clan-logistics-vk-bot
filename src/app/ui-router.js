@@ -10,6 +10,7 @@ import {
   handleMessageTriggerMenuState,
   openBotMessagesMenu,
 } from "../modules/message-templates/router.js";
+import { handleAssignTeamsState, openAssignTeamsConfirm } from "../modules/assign-teams/router.js";
 import { handleMyStationActiveState, handleMyStationMenuState, openMyStationMenu } from "../modules/my-station/router.js";
 import { handleAdminMenuState, handleParticipantHomeState } from "../modules/admin-home/router.js";
 import {
@@ -28,23 +29,27 @@ import { handleStationsListState, handleStationsTeamsMenuState, handleTeamsListS
 import { handleStatusViewState, openStatusScreen } from "../modules/status/router.js";
 import { sendWhoAreYouScreen } from "../modules/welcome/screens.js";
 
-// Все эти /u - это русские слова в Unicode, потому что Codex постоянно теряется из-за UTF-8
-const INPUT_PARTICIPANT = "\u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a";
-const INPUT_ORGANIZER = "\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440";
-const INPUT_ADMIN = "\u0430\u0434\u043c\u0438\u043d";
-const INPUT_WRONG_ROLE = "\u043f\u0435\u0440\u0435\u043f\u0443\u0442\u0430\u043b, \u044f \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440";
-const INPUT_BACK = "\u043d\u0430\u0437\u0430\u0434";
-const INPUT_EXIT = "\u0432\u044b\u0439\u0442\u0438";
-const INPUT_START_VK = "\u043d\u0430\u0447\u0430\u0442\u044c";
+const INPUT_PARTICIPANT = "участник";
+const INPUT_ORGANIZER = "организатор";
+const INPUT_ADMIN = "админ";
+const INPUT_WRONG_ROLE = "перепутал, я организатор";
+const INPUT_BACK = "назад";
+const INPUT_EXIT = "выйти";
+const INPUT_START_VK = "начать";
 const ADMIN_ONLY_ACTIONS = new Set([
+  ACTIONS.OPEN_ASSIGN_TEAMS,
   ACTIONS.OPEN_MY_STATION,
   ACTIONS.OPEN_STATUS,
   ACTIONS.OPEN_BOT_MESSAGES,
   ACTIONS.OPEN_STATIONS_TEAMS,
   ACTIONS.OPEN_RESET,
+  ACTIONS.ASSIGN_TEAMS_CONFIRM,
+  ACTIONS.ASSIGN_TEAMS_RETRY_FAILED,
 ]);
 const ADMIN_ONLY_STATES = new Set([
   STATE_TYPES.ADMIN_MENU,
+  STATE_TYPES.ASSIGN_TEAMS_CONFIRM,
+  STATE_TYPES.ASSIGN_TEAMS_RETRY,
   STATE_TYPES.MY_STATION_MENU,
   STATE_TYPES.MY_STATION_ACTIVE,
   STATE_TYPES.STATUS_VIEW,
@@ -55,6 +60,7 @@ const ADMIN_ONLY_STATES = new Set([
   STATE_TYPES.MESSAGE_TRIGGER_MENU,
   STATE_TYPES.MESSAGE_RECORDING,
   STATE_TYPES.MESSAGE_TEMPLATE_ACTIONS,
+  STATE_TYPES.RESET_MENU,
   STATE_TYPES.RESET_CONFIRM,
   STATE_TYPES.IMPORT_WAIT_FILE,
 ]);
@@ -64,6 +70,8 @@ const stateHandlers = {
   [STATE_TYPES.AWAIT_ADMIN_PASSWORD]: handleAdminPasswordState,
   [STATE_TYPES.AWAIT_ADMIN_STATION]: handleAdminStationState,
   [STATE_TYPES.ADMIN_MENU]: handleAdminMenuState,
+  [STATE_TYPES.ASSIGN_TEAMS_CONFIRM]: handleAssignTeamsState,
+  [STATE_TYPES.ASSIGN_TEAMS_RETRY]: handleAssignTeamsState,
   [STATE_TYPES.MY_STATION_MENU]: handleMyStationMenuState,
   [STATE_TYPES.MY_STATION_ACTIVE]: handleMyStationActiveState,
   [STATE_TYPES.STATUS_VIEW]: handleStatusViewState,
@@ -74,6 +82,7 @@ const stateHandlers = {
   [STATE_TYPES.MESSAGE_TRIGGER_MENU]: handleMessageTriggerMenuState,
   [STATE_TYPES.MESSAGE_RECORDING]: handleMessageRecordingState,
   [STATE_TYPES.MESSAGE_TEMPLATE_ACTIONS]: handleMessageTemplateActionsState,
+  [STATE_TYPES.RESET_MENU]: handleResetConfirmState,
   [STATE_TYPES.RESET_CONFIRM]: handleResetConfirmState,
   [STATE_TYPES.IMPORT_WAIT_FILE]: handleImportWaitFileState,
   [STATE_TYPES.PARTICIPANT_HOME]: handleParticipantHomeState,
@@ -113,6 +122,11 @@ export async function handleDefaultUiMessage(env, payload, state, vk, ctx, provi
 
   if (context.input === INPUT_EXIT || context.action === ACTIONS.EXIT) {
     await handleGlobalExit(context);
+    return;
+  }
+
+  if (context.action === ACTIONS.OPEN_ASSIGN_TEAMS && context.user?.is_admin) {
+    await openAssignTeamsConfirm(context);
     return;
   }
 
@@ -199,7 +213,7 @@ async function normalizeNonAdminAdminState(context) {
     await setUserState(context.env, context.user.id, STATE_TYPES.PARTICIPANT_HOME, "idle");
     context.userState = {
       state_type: STATE_TYPES.PARTICIPANT_HOME,
-      state_name: "idle",
+      step_key: "idle",
       payload: null,
     };
     return;

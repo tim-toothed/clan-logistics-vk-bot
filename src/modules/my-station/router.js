@@ -3,7 +3,6 @@ import { STATE_TYPES } from "../../app/state-types.js";
 import {
   completeStationForTeam,
   getActiveEventForStation,
-  getAvailableTeamsForStation,
   getCandidateStationsForTeam,
   getPendingTeamsForStation,
   getRemainingStationsForTeam,
@@ -12,6 +11,7 @@ import {
   getWaitingTeams,
   setTeamStatus,
   startStationForTeam,
+  transitionTeamToNextStation,
 } from "../../db/events-repository.js";
 import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../../db/messages-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
@@ -23,21 +23,23 @@ import {
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
   sendActiveStationScreen,
+  sendFinishConfirmationScreen,
   sendForceFinishManualRelayScreen,
-  sendMyStationMenuScreen,
+  sendIdleStationScreen,
   sendMyStationUnavailableScreen,
   sendStationDeliveryFailedScreen,
 } from "./screens.js";
 
 const WAITING_FALLBACK_MESSAGE = [
   {
-    text: "\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0445 \u0441\u0442\u0430\u043d\u0446\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442. \u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u043e\u0436\u0438\u0434\u0430\u0439\u0442\u0435 \u0434\u0430\u043b\u044c\u043d\u0435\u0439\u0448\u0438\u0445 \u0443\u043a\u0430\u0437\u0430\u043d\u0438\u0439.",
+    text: "Свободных станций пока нет. Пожалуйста, ожидайте дальнейших указаний.",
     attachments: [],
   },
 ];
+
 const FINISHED_FALLBACK_MESSAGE = [
   {
-    text: "\u0412\u044b \u043f\u0440\u043e\u0448\u043b\u0438 \u0432\u0441\u0435 \u0441\u0442\u0430\u043d\u0446\u0438\u0438. \u041e\u0436\u0438\u0434\u0430\u0439\u0442\u0435 \u0434\u0430\u043b\u044c\u043d\u0435\u0439\u0448\u0438\u0445 \u0443\u043a\u0430\u0437\u0430\u043d\u0438\u0439 \u043e\u0442 \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440\u043e\u0432.",
+    text: "Вы прошли все станции. Ожидайте дальнейших указаний от организаторов.",
     attachments: [],
   },
 ];
@@ -52,61 +54,75 @@ export async function openMyStationMenu(context) {
 
   const activeEvent = await getActiveEventForStation(context.env, stationId);
 
-  if (activeEvent) {
-    const activeTeam = await getTeamById(context.env, activeEvent.team_id);
-
-    await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "active", {
-      teamId: activeEvent.team_id,
-    });
-    await sendActiveStationScreen(context.vk, context.peerId, activeTeam?.team_name ?? "\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430", activeEvent.team_id);
+  if (!activeEvent) {
+    await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_MENU, "idle");
+    await sendIdleStationScreen(context.vk, context.peerId);
     return true;
   }
 
-  const availableTeams = await getAvailableTeamsForStation(context.env, stationId);
+  const activeTeam = await getTeamById(context.env, activeEvent.team_id);
 
-  await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_MENU, "idle");
-  await sendMyStationMenuScreen(context.vk, context.peerId, availableTeams);
+  await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "active", {
+    teamId: activeEvent.team_id,
+  });
+  await sendActiveStationScreen(context.vk, context.peerId, activeTeam?.team_name ?? "Неизвестная команда", activeEvent.team_id);
   return true;
 }
 
 export async function handleMyStationMenuState(context) {
-  if (context.action === ACTIONS.BACK_TO_ADMIN_MENU || context.input === "\u043d\u0430\u0437\u0430\u0434") {
+  if (context.action === ACTIONS.BACK_TO_ADMIN_MENU || context.input === "назад") {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
   }
 
-  if (context.action !== ACTIONS.STATION_TEAM_SELECT || !context.buttonPayload?.teamId) {
-    return openMyStationMenu(context);
-  }
-
-  return startSelectedTeam(context, context.buttonPayload.teamId);
+  return openMyStationMenu(context);
 }
 
 export async function handleMyStationActiveState(context) {
-  if (context.action === ACTIONS.BACK_TO_ADMIN_MENU || context.input === "\u043d\u0430\u0437\u0430\u0434") {
+  if (context.action === ACTIONS.BACK_TO_ADMIN_MENU || context.input === "назад") {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
+  }
+
+  if (context.action === ACTIONS.STATION_FINISH_CANCEL) {
+    return openMyStationMenu(context);
+  }
+
+  if (context.action === ACTIONS.STATION_FINISH) {
+    return askFinishConfirmation(context);
   }
 
   if (context.action === ACTIONS.STATION_FORCE_FINISH) {
     return finishCurrentStation(context, { force: true });
   }
 
-  if (context.action !== ACTIONS.STATION_FINISH) {
-    if (context.userState?.step_key === "delivery_failed" && context.userState?.payload?.delivery) {
-      await sendStationDeliveryFailedScreen(context.vk, context.peerId, buildFailureScreenOptions(context.userState.payload.delivery));
-      return true;
+  if (context.action === ACTIONS.STATION_FINISH_CONFIRM) {
+    return finishCurrentStation(context, { force: false });
+  }
+
+  if (context.userState?.step_key === "confirm_finish") {
+    const activeEvent = await getActiveEventForStation(context.env, context.user.station_id);
+    const activeTeam = activeEvent ? await getTeamById(context.env, activeEvent.team_id) : null;
+
+    if (!activeEvent || !activeTeam) {
+      return openMyStationMenu(context);
     }
 
+    await sendFinishConfirmationScreen(context.vk, context.peerId, activeTeam.team_name, activeTeam.id);
     return true;
   }
 
-  return finishCurrentStation(context, { force: false });
+  if (context.userState?.step_key === "delivery_failed" && context.userState?.payload?.delivery) {
+    await sendStationDeliveryFailedScreen(context.vk, context.peerId, buildFailureScreenOptions(context.userState.payload.delivery));
+    return true;
+  }
+
+  return openMyStationMenu(context);
 }
 
-async function startSelectedTeam(context, teamId) {
+async function askFinishConfirmation(context) {
   const stationId = context.user.station_id;
 
   if (!stationId) {
@@ -114,23 +130,22 @@ async function startSelectedTeam(context, teamId) {
     return true;
   }
 
-  const team = await getTeamById(context.env, teamId);
+  const activeEvent = await getActiveEventForStation(context.env, stationId);
+
+  if (!activeEvent) {
+    return openMyStationMenu(context);
+  }
+
+  const team = await getTeamById(context.env, activeEvent.team_id);
 
   if (!team) {
     return openMyStationMenu(context);
   }
 
-  await startStationForTeam(context.env, {
-    stationId,
-    teamId: team.id,
-    startedByUserId: context.user.id,
-    startTime: new Date().toISOString(),
-  });
-
-  await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "active", {
+  await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "confirm_finish", {
     teamId: team.id,
   });
-  await sendActiveStationScreen(context.vk, context.peerId, team.team_name, team.id);
+  await sendFinishConfirmationScreen(context.vk, context.peerId, team.team_name, team.id);
   return true;
 }
 
@@ -164,7 +179,7 @@ async function finishCurrentStation(context, options = {}) {
   const teamFinished = remainingStations.length <= 1;
   const delivery = await prepareTeamDelivery(context, {
     team,
-    station,
+    currentStation: station,
     teamFinished,
   });
 
@@ -181,15 +196,28 @@ async function finishCurrentStation(context, options = {}) {
     }
   }
 
-  await completeStationForTeam(context.env, {
-    eventId: activeEvent.id,
-    stationId: station.id,
-    teamId: team.id,
-    endedByUserId: context.user.id,
-    endTime: new Date().toISOString(),
-    stationDone,
-    teamStatus: delivery.teamStatus,
-  });
+  if (delivery.resultType === "go_to_station" && delivery.targetStationId) {
+    await transitionTeamToNextStation(context.env, {
+      eventId: activeEvent.id,
+      stationId: station.id,
+      teamId: team.id,
+      nextStationId: delivery.targetStationId,
+      endedByUserId: context.user.id,
+      endTime: new Date().toISOString(),
+      stationDone,
+      startTime: new Date().toISOString(),
+    });
+  } else {
+    await completeStationForTeam(context.env, {
+      eventId: activeEvent.id,
+      stationId: station.id,
+      teamId: team.id,
+      endedByUserId: context.user.id,
+      endTime: new Date().toISOString(),
+      stationDone,
+      teamStatus: delivery.teamStatus,
+    });
+  }
 
   if (force) {
     await notifyMainAdmins(context, formatStationLifecycleMessage("FORCE", team.team_name, station.station_name, delivery.stepLabel));
@@ -204,8 +232,8 @@ async function finishCurrentStation(context, options = {}) {
   }
 
   if (stationDone) {
-    await notifyStationAdmins(context, station.id, "\u0412\u0430\u0448\u0443 \u0441\u0442\u0430\u043d\u0446\u0438\u044e \u043f\u0440\u043e\u0448\u043b\u0438 \u0432\u0441\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u044b!");
-    await context.vk.sendText(context.peerId, "\u0412\u0430\u0448\u0443 \u0441\u0442\u0430\u043d\u0446\u0438\u044e \u043f\u0440\u043e\u0448\u043b\u0438 \u0432\u0441\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u044b!");
+    await notifyStationAdmins(context, station.id, "Вашу станцию прошли все команды!");
+    await context.vk.sendText(context.peerId, "Вашу станцию прошли все команды!");
   }
 
   await notifyWaitingTeamsAboutFreeStations(context);
@@ -230,51 +258,54 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
 
     const delivery = await prepareTeamDelivery(context, {
       team,
-      station: nextStation,
+      currentStation: nextStation,
       teamFinished: false,
       forcedResultType: "go_to_station",
       targetStation: nextStation,
-      teamStatus: "waiting_start",
+      teamStatus: "on_station",
     });
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
     if (!deliveryReport.ok) {
       await notifyMainAdmins(
         context,
-        `[FAIL] \u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0432\u044b\u0432\u0435\u0441\u0442\u0438 \u0438\u0437 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0443 "${team.team_name}" \u043d\u0430 \u0441\u0442\u0430\u043d\u0446\u0438\u044e "${nextStation.station_name}".`,
+        `[FAIL] Не удалось вывести из ожидания команду "${team.team_name}" на станцию "${nextStation.station_name}".`,
       );
       continue;
     }
 
     reservedStationIds.add(nextStation.id);
-    await setTeamStatus(context.env, team.id, "waiting_start");
+    await startStationForTeam(context.env, {
+      stationId: nextStation.id,
+      teamId: team.id,
+      startedByUserId: null,
+      startTime: new Date().toISOString(),
+    });
     await notifyMainAdmins(
       context,
-      `[OK] \u041a\u043e\u043c\u0430\u043d\u0434\u0430 "${team.team_name}" \u0432\u044b\u0432\u0435\u0434\u0435\u043d\u0430 \u0438\u0437 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f \u043d\u0430 \u0441\u0442\u0430\u043d\u0446\u0438\u044e "${nextStation.station_name}".`,
+      `[OK] Команда "${team.team_name}" выведена из ожидания на станцию "${nextStation.station_name}".`,
     );
   }
 }
 
 async function prepareTeamDelivery(context, options) {
   const team = options.team;
-  const currentStation = options.station;
+  const currentStation = options.currentStation;
   const forcedResultType = options.forcedResultType ?? null;
   const recipients = await listParticipantUsersByTeam(context.env, team.id);
 
   if (forcedResultType === "go_to_station") {
-    const targetStation = options.targetStation;
-
     return buildDeliveryPayload(context, {
       team,
       currentStation,
       recipients,
       resultType: "go_to_station",
       triggerType: MESSAGE_TRIGGER_TYPES.GO_TO_STATION,
-      targetStation,
-      teamStatus: options.teamStatus ?? "waiting_start",
+      targetStation: options.targetStation,
+      teamStatus: options.teamStatus ?? "on_station",
       fallbackContent: [
         {
-          text: `\u0412\u0430\u0448\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0430\u044f \u0441\u0442\u0430\u043d\u0446\u0438\u044f: ${targetStation.station_name}`,
+          text: `Ваша следующая станция: ${options.targetStation.station_name}`,
           attachments: [],
         },
       ],
@@ -304,10 +335,10 @@ async function prepareTeamDelivery(context, options) {
       resultType: "go_to_station",
       triggerType: MESSAGE_TRIGGER_TYPES.GO_TO_STATION,
       targetStation: nextStation,
-      teamStatus: "waiting_start",
+      teamStatus: "on_station",
       fallbackContent: [
         {
-          text: `\u0412\u0430\u0448\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0430\u044f \u0441\u0442\u0430\u043d\u0446\u0438\u044f: ${nextStation.station_name}`,
+          text: `Ваша следующая станция: ${nextStation.station_name}`,
           attachments: [],
         },
       ],
@@ -343,6 +374,7 @@ async function buildDeliveryPayload(context, options) {
     initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
     teamStatus: options.teamStatus,
     resultType: options.resultType,
+    targetStationId: options.targetStation?.id ?? null,
     targetStationName: options.targetStation?.station_name ?? null,
     recipients: options.recipients,
     contentItems,
@@ -383,32 +415,32 @@ async function notifyMainAdmins(context, message) {
 
 function getDeliveryLabel(resultType) {
   if (resultType === "finished") {
-    return "\u0424\u0438\u043d\u0430\u043b\u044c\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u0435";
+    return "Финальное сообщение команде";
   }
 
   if (resultType === "waiting_station") {
-    return "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f \u0441\u0442\u0430\u043d\u0446\u0438\u0438";
+    return "Сообщение ожидания станции";
   }
 
-  return "\u041f\u0435\u0440\u0435\u0445\u043e\u0434 \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0443\u044e \u0441\u0442\u0430\u043d\u0446\u0438\u044e";
+  return "Переход на следующую станцию";
 }
 
 function getStepLabel(resultType, stationName) {
   if (resultType === "finished") {
-    return "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u0435 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0430";
+    return "Завершение маршрута";
   }
 
   if (resultType === "waiting_station") {
-    return "\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u0441\u0432\u043e\u0431\u043e\u0434\u043d\u043e\u0439 \u0441\u0442\u0430\u043d\u0446\u0438\u0438";
+    return "Ожидание свободной станции";
   }
 
   return stationName
-    ? `\u041f\u0435\u0440\u0435\u0445\u043e\u0434 \u043d\u0430 \u0441\u0442\u0430\u043d\u0446\u0438\u044e "${stationName}"`
-    : "\u041f\u0435\u0440\u0435\u0445\u043e\u0434 \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0443\u044e \u0441\u0442\u0430\u043d\u0446\u0438\u044e";
+    ? `Переход на станцию "${stationName}"`
+    : "Переход на следующую станцию";
 }
 
 function formatStationLifecycleMessage(statusCode, teamName, stationName, stepLabel) {
-  return `[${statusCode}] \u0421\u0442\u0430\u043d\u0446\u0438\u044f "${stationName}" / \u043a\u043e\u043c\u0430\u043d\u0434\u0430 "${teamName}" / \u0448\u0430\u0433: ${stepLabel}`;
+  return `[${statusCode}] Станция "${stationName}" / команда "${teamName}" / шаг: ${stepLabel}`;
 }
 
 function serializeDeliveryForState(report) {

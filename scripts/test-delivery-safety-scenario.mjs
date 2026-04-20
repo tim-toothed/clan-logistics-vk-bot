@@ -33,6 +33,14 @@ async function main() {
   vk.failPeerIds.add(3001);
   await handleMyStationActiveState(context);
 
+  const confirmationState = await getUserState(env, organizer.id);
+  assertEqual(confirmationState?.step_key, "confirm_finish", "Перед завершением должен показываться экран подтверждения.");
+
+  context.action = ACTIONS.STATION_FINISH_CONFIRM;
+  context.buttonPayload = { action: ACTIONS.STATION_FINISH_CONFIRM, teamId: 1 };
+  context.userState = confirmationState;
+  await handleMyStationActiveState(context);
+
   const failureAssertions = await collectFailurePhaseAssertions(env, vk, organizer.id);
 
   vk.failPeerIds.delete(3001);
@@ -101,10 +109,10 @@ async function collectForcePhaseAssertions(env, vk, organizerUserId) {
   const organizerMessages = vk.getTextsForPeer(9001);
   const mainAdminMessages = vk.getTextsForPeer(9002);
 
-  assertEqual(station?.status, "free", "После принудительного завершения станция должна освободиться.");
+  assertEqual(station?.status, "occupied", "После принудительного завершения станция должна сразу заняться ожидающей командой.");
   assertEqual(teamOne?.status, "waiting_station", "Команда, для которой форсировали завершение, должна перейти в waiting_station.");
-  assertEqual(teamTwo?.status, "waiting_start", "Ожидающая команда должна получить новую станцию и выйти из waiting_station.");
-  assertEqual(activeEvent, null, "После принудительного завершения активного события на станции остаться не должно.");
+  assertEqual(teamTwo?.status, "on_station", "Ожидающая команда должна получить новую станцию и сразу перейти в on_station.");
+  assertEqual(activeEvent?.team_id, 2, "После принудительного завершения на станции должно появиться активное событие для ожидавшей команды.");
   assertEqual(organizerState?.step_key, "idle", "Организатор должен вернуться в обычное состояние меню станции.");
   assertSome(
     waitingTeamMessages,

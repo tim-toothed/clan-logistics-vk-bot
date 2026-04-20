@@ -3,7 +3,7 @@ import { STATE_TYPES } from "../../app/state-types.js";
 import { getCompletedEventDurationsForStation, getStationProgressSummary, getTeamById } from "../../db/events-repository.js";
 import { getTeams } from "../../db/setup-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
-import { listAdminLabelsByStation } from "../../db/users-repository.js";
+import { listAdminLabelsByStation, listParticipantUsersByTeam } from "../../db/users-repository.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import { sendStatusScreen } from "./screens.js";
 
@@ -18,7 +18,7 @@ export async function openStatusScreen(context) {
 export async function handleStatusViewState(context) {
   if (context.input === "назад" || context.action === ACTIONS.BACK_TO_ADMIN_MENU) {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
   }
 
@@ -38,6 +38,7 @@ async function buildStatusSummary(env) {
   for (const station of stations) {
     const durations = await getCompletedEventDurationsForStation(env, station.id);
     const currentTeam = station.current_team_id ? await getTeamById(env, station.current_team_id) : null;
+    const currentParticipants = currentTeam ? await listParticipantUsersByTeam(env, currentTeam.id) : [];
     const admins = await listAdminLabelsByStation(env, station.id);
     const completedCount = Number(station.completed_teams_count ?? 0);
     const remainingCount = Math.max(0, totalTeams - completedCount);
@@ -48,6 +49,7 @@ async function buildStatusSummary(env) {
         stationName: station.station_name,
         status: station.status,
         currentTeamName: currentTeam?.team_name ?? null,
+        currentParticipants,
         admins,
         remainingCount,
         totalTeams,
@@ -56,17 +58,25 @@ async function buildStatusSummary(env) {
     );
   }
 
-  return [
-    "Статистика",
-    sections.join("\n\n--------------------\n\n"),
-  ].join("\n");
+  return ["Статистика", sections.join("\n\n--------------------\n\n")].join("\n");
 }
 
-function buildStationSection({ stationName, status, currentTeamName, admins, remainingCount, totalTeams, durationSummary }) {
+function buildStationSection({
+  stationName,
+  status,
+  currentTeamName,
+  currentParticipants,
+  admins,
+  remainingCount,
+  totalTeams,
+  durationSummary,
+}) {
   const lines = [`${stationName}${formatStationStatusEmoji(status)}`];
 
   if (status === "occupied" && currentTeamName) {
-    lines.push(`Текущая команда: ${currentTeamName}`);
+    const participantLinks = formatParticipantLinks(currentParticipants);
+    const participantSuffix = participantLinks ? ` (${participantLinks})` : "";
+    lines.push(`Текущая команда: ${currentTeamName}${participantSuffix}`);
   }
 
   lines.push(`Организаторы: ${admins.length ? admins.join(", ") : "не назначены"}`);
@@ -74,6 +84,12 @@ function buildStationSection({ stationName, status, currentTeamName, admins, rem
   lines.push(`Среднее время: ${durationSummary}`);
 
   return lines.join("\n");
+}
+
+function formatParticipantLinks(participants) {
+  return participants
+    .map((participant) => `[${participant.displayName}](https://vk.com/im/convo/${participant.vkUserId})`)
+    .join(" | ");
 }
 
 function formatStationStatusEmoji(status) {

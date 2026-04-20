@@ -1,17 +1,15 @@
 import { createAdminMenuKeyboard } from "../admin-home/keyboards.js";
 import {
   createActiveStationKeyboard,
+  createFinishConfirmationKeyboard,
+  createIdleStationKeyboard,
   createMyStationBackKeyboard,
-  createMyStationTeamsKeyboard,
   createStationDeliveryFailedKeyboard,
 } from "./keyboards.js";
 
 const TEXT_UNAVAILABLE =
-  "\u042d\u0442\u043e\u0442 \u0440\u0430\u0437\u0434\u0435\u043b \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0442\u043e\u043b\u044c\u043a\u043e \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0442\u043e\u0440\u0443, \u043f\u0440\u0438\u0432\u044f\u0437\u0430\u043d\u043d\u043e\u043c\u0443 \u043a \u0441\u0442\u0430\u043d\u0446\u0438\u0438. \u0415\u0441\u043b\u0438 \u0441\u0442\u0430\u043d\u0446\u0438\u0438 \u0435\u0449\u0451 \u043d\u0435 \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u044b, \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 \"\u0421\u0442\u0430\u043d\u0446\u0438\u0438 \u0438 \u043a\u043e\u043c\u0430\u043d\u0434\u044b\" \u0438\u043b\u0438 \u0432\u043e\u0439\u0434\u0438\u0442\u0435 \u0437\u0430\u043d\u043e\u0432\u043e.";
-const TEXT_NO_TEAMS =
-  "\u0413\u043e\u0442\u043e\u0432\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u0441\u0442\u0430\u043d\u0446\u0438\u044e? \u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043a\u043e\u043c\u0430\u043d\u0434 \u0434\u043b\u044f \u044d\u0442\u043e\u0439 \u0441\u0442\u0430\u043d\u0446\u0438\u0438.";
-const TEXT_TEAM_CHOICE =
-  "\u0413\u043e\u0442\u043e\u0432\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u0441\u0442\u0430\u043d\u0446\u0438\u044e? \u041a\u0430\u043a\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043a \u0432\u0430\u043c \u043f\u0440\u0438\u0448\u043b\u0430?";
+  'Этот раздел доступен только организатору, привязанному к станции. Если станции ещё не назначены, используйте "Станции и команды" или войдите заново.';
+const TEXT_IDLE_STATION = "Сейчас на вашу станцию никто не назначен.";
 
 export async function sendMyStationUnavailableScreen(vk, peerId) {
   await vk.sendText(peerId, TEXT_UNAVAILABLE, {
@@ -19,40 +17,43 @@ export async function sendMyStationUnavailableScreen(vk, peerId) {
   });
 }
 
-export async function sendMyStationMenuScreen(vk, peerId, teams) {
-  if (!teams.length) {
-    await vk.sendText(peerId, TEXT_NO_TEAMS, {
-      keyboard: createMyStationBackKeyboard(),
-    });
-    return;
-  }
-
-  await vk.sendText(peerId, TEXT_TEAM_CHOICE, {
-    keyboard: createMyStationTeamsKeyboard(teams),
+export async function sendIdleStationScreen(vk, peerId) {
+  await vk.sendText(peerId, TEXT_IDLE_STATION, {
+    keyboard: createIdleStationKeyboard(),
   });
 }
 
 export async function sendActiveStationScreen(vk, peerId, teamName, teamId) {
   await vk.sendText(
     peerId,
-    `\u0412\u044b \u0432\u0435\u0434\u0435\u0442\u0435 \u0441\u0442\u0430\u043d\u0446\u0438\u044e \u0434\u043b\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u044b ${teamName}. \u041d\u0435 \u0437\u0430\u0431\u0443\u0434\u044c\u0442\u0435 \u043d\u0430\u0436\u0430\u0442\u044c "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0441\u0442\u0430\u043d\u0446\u0438\u044e", \u043a\u043e\u0433\u0434\u0430 \u0437\u0430\u043a\u043e\u043d\u0447\u0438\u0442\u0435 - \u0438\u043d\u0430\u0447\u0435 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u0437\u0430\u0431\u043b\u0443\u0434\u044f\u0442\u0441\u044f.`,
+    `На вашу станцию назначена команда "${teamName}". Когда команда действительно пройдет станцию, нажмите "Завершить станцию".`,
     {
       keyboard: createActiveStationKeyboard(teamId),
     },
   );
 }
 
+export async function sendFinishConfirmationScreen(vk, peerId, teamName, teamId) {
+  await vk.sendText(
+    peerId,
+    `Подтвердите, что команда "${teamName}" действительно прошла станцию.`,
+    {
+      keyboard: createFinishConfirmationKeyboard(teamId),
+    },
+  );
+}
+
 export async function sendStationDeliveryFailedScreen(vk, peerId, options) {
-  const teamName = options?.teamName ?? "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430";
-  const stepLabel = options?.stepLabel ?? "\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433";
+  const teamName = options?.teamName ?? "неизвестная команда";
+  const stepLabel = options?.stepLabel ?? "следующий шаг";
   const failedRecipients = Array.isArray(options?.failedRecipients) ? options.failedRecipients : [];
   const failureLines = failedRecipients.length
-    ? failedRecipients.map((item) => `- ${item.displayName}: ${item.errorMessage ?? "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u0430\u044f \u043e\u0448\u0438\u0431\u043a\u0430"}`).join("\n")
-    : `- \u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0448\u0438\u0431\u043a\u0438 \u043d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0435\u043d\u0430`;
+    ? failedRecipients.map((item) => `- ${item.displayName}: ${item.errorMessage ?? "неизвестная ошибка"}`).join("\n")
+    : "- Причина ошибки не определена";
 
   await vk.sendText(
     peerId,
-    `\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u043a\u043e\u043c\u0430\u043d\u0434\u0435 "${teamName}".\n\n\u0428\u0430\u0433: ${stepLabel}\n\u0421\u0442\u0430\u043d\u0446\u0438\u044f \u043f\u043e\u043a\u0430 \u043d\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430.\n\u041c\u043e\u0436\u043d\u043e \u043f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0435\u0449\u0451 \u0440\u0430\u0437 \u0438\u043b\u0438 \u043f\u0440\u0438\u043d\u0443\u0434\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0441\u0442\u0430\u043d\u0446\u0438\u044e.\n\n\u041d\u0435 \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e:\n${failureLines}`,
+    `Не удалось отправить инструкции команде "${teamName}".\n\nШаг: ${stepLabel}\nСтанция пока не завершена.\nМожно попробовать ещё раз или принудительно завершить станцию.\n\nНе доставлено:\n${failureLines}`,
     {
       keyboard: createStationDeliveryFailedKeyboard(options?.teamId),
     },
@@ -60,13 +61,13 @@ export async function sendStationDeliveryFailedScreen(vk, peerId, options) {
 }
 
 export async function sendForceFinishManualRelayScreen(vk, peerId, options) {
-  const teamName = options?.teamName ?? "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430";
-  const stepLabel = options?.stepLabel ?? "\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433";
-  const relayText = options?.relayText ?? "\u0422\u0435\u043a\u0441\u0442 \u0434\u043b\u044f \u0440\u0443\u0447\u043d\u043e\u0439 \u043f\u0435\u0440\u0435\u0434\u0430\u0447\u0438 \u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442.";
+  const teamName = options?.teamName ?? "неизвестная команда";
+  const stepLabel = options?.stepLabel ?? "следующий шаг";
+  const relayText = options?.relayText ?? "Текст для ручной передачи отсутствует.";
 
   await vk.sendText(
     peerId,
-    `\u0421\u0442\u0430\u043d\u0446\u0438\u044f \u043f\u0440\u0438\u043d\u0443\u0434\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430 \u0434\u043b\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u044b "${teamName}".\n\n\u0428\u0430\u0433: ${stepLabel}\n\u041f\u0435\u0440\u0435\u0434\u0430\u0439\u0442\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u0435 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0435 \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u0432\u0440\u0443\u0447\u043d\u0443\u044e:\n\n${relayText}`,
+    `Станция принудительно завершена для команды "${teamName}".\n\nШаг: ${stepLabel}\nПередайте команде следующие инструкции вручную:\n\n${relayText}`,
     {
       keyboard: createMyStationBackKeyboard(),
     },

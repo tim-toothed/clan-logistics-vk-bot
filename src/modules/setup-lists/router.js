@@ -1,5 +1,12 @@
 import { STATE_TYPES } from "../../app/state-types.js";
-import { getStations, getTeams, replaceStations, replaceTeams } from "../../db/setup-repository.js";
+import {
+  formatStationDefinitions,
+  getStations,
+  getTeams,
+  parseStationDefinitions,
+  replaceStations,
+  replaceTeams,
+} from "../../db/setup-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
 import { formatNamedRows, formatStringList, parseNumberedList } from "../../utils/text.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
@@ -21,7 +28,7 @@ export async function openStationsTeamsMenu(context) {
 export async function handleStationsTeamsMenuState(context) {
   if (context.input === "назад") {
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId);
+    await sendAdminMenuScreen(context.vk, context.peerId, { env: context.env, user: context.user });
     return true;
   }
 
@@ -37,7 +44,7 @@ export async function handleStationsTeamsMenuState(context) {
     const stations = await getStations(context.env);
 
     await setUserState(context.env, context.user.id, STATE_TYPES.EDIT_STATIONS_LIST, "wait_list");
-    await sendStationsEditPromptScreen(context.vk, context.peerId, formatNamedRows(stations, "station_name"));
+    await sendStationsEditPromptScreen(context.vk, context.peerId, formatStationDefinitions(stations));
     return true;
   }
 
@@ -73,14 +80,19 @@ export async function handleStationsListState(context) {
   }
 
   const stationNames = parseNumberedList(context.rawText);
+  const stationDefinitions = parseStationDefinitions(stationNames);
 
-  if (!stationNames) {
+  if (!stationNames || !stationDefinitions) {
     await sendInvalidListFormatScreen(context.vk, context.peerId);
     return true;
   }
 
-  await replaceStations(context.env, stationNames);
+  await replaceStations(context.env, stationDefinitions);
   await setUserState(context.env, context.user.id, STATE_TYPES.MANAGE_LISTS_MENU, "idle");
-  await sendStationsUpdatedScreen(context.vk, context.peerId, formatStringList(stationNames));
+  await sendStationsUpdatedScreen(
+    context.vk,
+    context.peerId,
+    formatStationDefinitions(stationDefinitions),
+  );
   return true;
 }

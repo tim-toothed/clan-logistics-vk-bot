@@ -115,7 +115,11 @@ export async function handleAdminStationState(context) {
   if (context.input === "войти как админ") {
     await setUserAdminMode(context.env, context.user.id, null);
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-    await sendAdminMenuScreen(context.vk, context.peerId, ADMIN_MENU_WELCOME_MESSAGE);
+    await sendAdminMenuScreen(context.vk, context.peerId, {
+      env: context.env,
+      message: ADMIN_MENU_WELCOME_MESSAGE,
+      user: { ...context.user, is_admin: 1, station_id: null },
+    });
     return true;
   }
 
@@ -134,7 +138,11 @@ export async function handleAdminStationState(context) {
 
   await setUserAdminMode(context.env, context.user.id, selectedStation.id);
   await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
-  await sendAdminMenuScreen(context.vk, context.peerId, `Вы вошли как организатор станции "${selectedStation.station_name}".`);
+  await sendAdminMenuScreen(context.vk, context.peerId, {
+    env: context.env,
+    message: `Вы вошли как организатор станции "${selectedStation.station_name}".`,
+    user: { ...context.user, is_admin: 1, station_id: selectedStation.id },
+  });
   return true;
 }
 

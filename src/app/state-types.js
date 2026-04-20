@@ -13,7 +13,10 @@ export const STATE_TYPES = Object.freeze({
   MESSAGE_TRIGGER_MENU: "message_trigger_menu",
   MESSAGE_RECORDING: "message_recording",
   MESSAGE_TEMPLATE_ACTIONS: "message_template_actions",
+  RESET_MENU: "reset_menu",
   RESET_CONFIRM: "reset_confirm",
   IMPORT_WAIT_FILE: "import_wait_file",
   PARTICIPANT_HOME: "participant_home",
+  ASSIGN_TEAMS_CONFIRM: "assign_teams_confirm",
+  ASSIGN_TEAMS_RETRY: "assign_teams_retry",
 });

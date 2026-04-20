@@ -1,15 +1,29 @@
 import { createAdminMenuKeyboard } from "../admin-home/keyboards.js";
-import { createResetConfirmKeyboard } from "./keyboards.js";
 import { createBackKeyboard } from "../../ui/core-keyboards.js";
+import { ACTIONS } from "../../app/action-types.js";
+import { createResetConfirmKeyboard, createResetMenuKeyboard } from "./keyboards.js";
 
-export async function sendResetConfirmScreen(vk, peerId) {
-  await vk.sendText(peerId, "Вы хотите удалить все данные о текущем мероприятии?", {
-    keyboard: createResetConfirmKeyboard(),
+export async function sendResetMenuScreen(vk, peerId) {
+  await vk.sendText(peerId, "Что вы хотите удалить?", {
+    keyboard: createResetMenuKeyboard(),
   });
 }
 
-export async function sendResetCompletedScreen(vk, peerId) {
-  await vk.sendText(peerId, "Данные текущего мероприятия удалены.", {
+export async function sendResetConfirmScreen(vk, peerId, resetKind) {
+  const message =
+    resetKind === "activity_history"
+      ? "Вы хотите удалить всю историю активности текущего мероприятия? Будут очищены только events, а команды, станции, сообщения и привязки пользователей сохранятся."
+      : "Вы хотите удалить все данные о текущем мероприятии?";
+  const confirmAction =
+    resetKind === "activity_history" ? ACTIONS.RESET_CONFIRM_ACTIVITY_HISTORY : ACTIONS.RESET_CONFIRM_ALL_DATA;
+
+  await vk.sendText(peerId, message, {
+    keyboard: createResetConfirmKeyboard(confirmAction),
+  });
+}
+
+export async function sendResetCompletedScreen(vk, peerId, message) {
+  await vk.sendText(peerId, message, {
     keyboard: createAdminMenuKeyboard(),
   });
 }

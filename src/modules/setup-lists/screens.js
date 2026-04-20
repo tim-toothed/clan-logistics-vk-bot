@@ -20,7 +20,7 @@ export async function sendTeamsEditPromptScreen(vk, peerId, currentTeams) {
 export async function sendStationsEditPromptScreen(vk, peerId, currentStations) {
   await vk.sendText(
     peerId,
-    `Впишите новый список станций. Текущий список станций:\n${currentStations}\n\nФормат:\n1. text\n2. text\n3. ...`,
+    `Впишите новый список станций. Текущий список станций:\n${currentStations}\n\nФормат:\n1. text\n2. text\n3. ...\n\nЕсли станция не должна попадаться первой, добавьте * в конце: Станция*`,
     {
       keyboard: createBackKeyboard(),
     },

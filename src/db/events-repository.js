@@ -8,6 +8,11 @@ export async function getTeamById(env, teamId) {
   return dbFirst(env, "SELECT * FROM teams WHERE id = ?", [teamId]);
 }
 
+export async function hasAnyEvents(env) {
+  const row = await dbFirst(env, "SELECT COUNT(*) AS total FROM events");
+  return Number(row?.total ?? 0) > 0;
+}
+
 export async function getActiveEventForStation(env, stationId) {
   return dbFirst(
     env,
@@ -93,6 +98,34 @@ export async function completeStationForTeam(env, { eventId, stationId, teamId, 
   ]);
 }
 
+export async function transitionTeamToNextStation(
+  env,
+  { eventId, stationId, teamId, nextStationId, endedByUserId, endTime, stationDone, startTime },
+) {
+  await dbBatch(env, [
+    {
+      sql: "UPDATE events SET end_time = ?, status = 'completed', ended_by_user_id = ? WHERE id = ?",
+      bindings: [endTime, endedByUserId, eventId],
+    },
+    {
+      sql: "UPDATE stations SET status = ?, current_team_id = NULL WHERE id = ?",
+      bindings: [stationDone ? "done" : "free", stationId],
+    },
+    {
+      sql: "UPDATE stations SET status = 'occupied', current_team_id = ? WHERE id = ?",
+      bindings: [teamId, nextStationId],
+    },
+    {
+      sql: "UPDATE teams SET status = 'on_station', current_station_id = ? WHERE id = ?",
+      bindings: [nextStationId, teamId],
+    },
+    {
+      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, ?, NULL, 'active', NULL, NULL)",
+      bindings: [nextStationId, teamId, startTime],
+    },
+  ]);
+}
+
 export async function getCandidateStationsForTeam(env, teamId) {
   return dbAll(
     env,
@@ -167,6 +200,44 @@ export async function getWaitingTeams(env) {
       SELECT *
       FROM teams
       WHERE status = 'waiting_station'
+      ORDER BY id ASC
+    `,
+  );
+}
+
+export async function listTeamsWaitingForInitialAssignment(env) {
+  return dbAll(
+    env,
+    `
+      SELECT *
+      FROM teams
+      WHERE status = 'waiting_start'
+        AND current_station_id IS NULL
+      ORDER BY id ASC
+    `,
+  );
+}
+
+export async function listFreeStations(env) {
+  return dbAll(
+    env,
+    `
+      SELECT *
+      FROM stations
+      WHERE status = 'free'
+      ORDER BY id ASC
+    `,
+  );
+}
+
+export async function listFreeStationsForInitialAssignment(env) {
+  return dbAll(
+    env,
+    `
+      SELECT *
+      FROM stations
+      WHERE status = 'free'
+        AND not_first = 0
       ORDER BY id ASC
     `,
   );

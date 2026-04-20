@@ -21,6 +21,7 @@ import {
 } from "./screens.js";
 import { createParticipantKeyboard } from "./keyboards.js";
 import { sendTemplateSequence } from "../../utils/vk-message.js";
+import { deliverParticipantContentWithAdminLog } from "../../utils/participant-delivery.js";
 
 export async function handleStartCommand(env, payload, state, vk) {
   void state;
@@ -101,7 +102,7 @@ export async function handleParticipantTeamState(context) {
 
   await setUserParticipantTeam(context.env, context.user.id, selectedTeam.id);
   await setUserState(context.env, context.user.id, STATE_TYPES.PARTICIPANT_HOME, "idle");
-  await sendParticipantTemplateOrFallback(context.env, context.vk, context.peerId);
+  await sendParticipantTemplateOrFallback(context, selectedTeam);
   return true;
 }
 
@@ -168,17 +169,31 @@ async function sendStartTemplateOrFallback(env, vk, peerId) {
   await vk.sendText(peerId, `${BOT_START_MESSAGE}\n\n${BOT_START_MENU_HINT}`);
 }
 
-async function sendParticipantTemplateOrFallback(env, vk, peerId) {
-  const template = await getMessageByTrigger(env, MESSAGE_TRIGGER_TYPES.PARTICIPANT_WELCOME, null);
+async function sendParticipantTemplateOrFallback(context, team) {
+  const template = await getMessageByTrigger(context.env, MESSAGE_TRIGGER_TYPES.PARTICIPANT_WELCOME, null);
+  const contentItems = template?.content_items?.length
+    ? template.content_items
+    : [{ text: PARTICIPANT_WELCOME_MESSAGE, attachments: [] }];
+  const deliveryReport = await deliverParticipantContentWithAdminLog(context, {
+    label: "\u041f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0443",
+    stepLabel: "\u0412\u0445\u043e\u0434 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430",
+    teamId: team.id,
+    teamName: team.team_name,
+    stationName: null,
+    initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
+    recipients: [
+      {
+        peerId: context.peerId,
+        displayName: context.user?.display_name ?? `VK ${context.peerId}`,
+      },
+    ],
+    contentItems,
+    keyboard: createParticipantKeyboard(),
+  });
 
-  if (template?.content_items?.length) {
-    await sendTemplateSequence(vk, peerId, template.content_items, {
-      keyboard: createParticipantKeyboard(),
-    });
-    return;
+  if (!deliveryReport.ok) {
+    throw new Error(deliveryReport.failedRecipients.map((item) => item.errorMessage).filter(Boolean).join("; ") || "Participant welcome delivery failed");
   }
-
-  await sendParticipantHomeScreen(vk, peerId);
 }
 
 async function findTeamByIdFromList(env, teamId) {

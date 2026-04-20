@@ -157,6 +157,26 @@ export async function listAllAdminPeerIds(env) {
   return rows.map((row) => Number(row.vk_user_id)).filter(Boolean);
 }
 
+export async function listMainAdminUsers(env) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT vk_user_id, display_name
+      FROM users
+      WHERE is_admin = 1
+        AND station_id IS NULL
+      ORDER BY id ASC
+    `,
+  );
+
+  return rows
+    .map((row) => ({
+      peerId: Number(row.vk_user_id),
+      displayName: row.display_name || getFallbackDisplayName(row.vk_user_id),
+    }))
+    .filter((row) => row.peerId);
+}
+
 export async function listAdminLabelsByStation(env, stationId) {
   const rows = await dbAll(
     env,
@@ -186,6 +206,27 @@ export async function listParticipantPeerIdsByTeam(env, teamId) {
   );
 
   return rows.map((row) => Number(row.vk_user_id)).filter(Boolean);
+}
+
+export async function listParticipantUsersByTeam(env, teamId) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT vk_user_id, display_name
+      FROM users
+      WHERE is_admin = 0
+        AND team_id = ?
+      ORDER BY id ASC
+    `,
+    [teamId],
+  );
+
+  return rows
+    .map((row) => ({
+      peerId: Number(row.vk_user_id),
+      displayName: row.display_name || getFallbackDisplayName(row.vk_user_id),
+    }))
+    .filter((row) => row.peerId);
 }
 
 export async function resetUsersEventData(env) {

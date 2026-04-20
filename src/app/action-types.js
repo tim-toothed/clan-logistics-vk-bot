@@ -10,6 +10,7 @@ export const ACTIONS = Object.freeze({
   PARTICIPANT_TEAM_SELECT: "participant_team_select",
   STATION_TEAM_SELECT: "station_team_select",
   STATION_FINISH: "station_finish",
+  STATION_FORCE_FINISH: "station_force_finish",
   MESSAGE_CREATE: "message_create",
   MESSAGE_OPEN: "message_open",
   MESSAGE_TRIGGER_STATIONS: "message_trigger_stations",

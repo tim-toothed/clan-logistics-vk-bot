@@ -91,7 +91,8 @@ async function testQuestStartAndRetry() {
   const stationOne = await getStationById(env, 1);
   const stationTwo = await getStationById(env, 2);
   const retryState = await getUserState(env, admin.id);
-  const mainAdminLogsAfterStart = vk.getTextsForPeer(9001).filter((text) => text.includes("[QUEST_START]"));
+  const initiatorLogsAfterStart = vk.getTextsForPeer(9001).filter((text) => text.includes("Старт квеста:"));
+  const otherMainAdminLogsAfterStart = vk.getTextsForPeer(9004).filter((text) => text.includes("Старт квеста:"));
 
   assertEqual(teamOne?.status, "on_station", "Первая команда должна оказаться на станции.");
   assertEqual(teamTwo?.status, "waiting_start", "Команда с ошибкой доставки не должна считаться стартовавшей.");
@@ -99,7 +100,8 @@ async function testQuestStartAndRetry() {
   assertEqual(stationOne?.status, "occupied", "Первая станция должна быть занята.");
   assertEqual(stationTwo?.status, "free", "Станция с недоставленным стартом должна остаться свободной.");
   assertEqual(retryState?.state_type, STATE_TYPES.ASSIGN_TEAMS_RETRY, "После частичного старта должен открываться экран повторной отправки.");
-  assertEqual(mainAdminLogsAfterStart.length, 1, "Главным админам должен прийти итоговый лог по старту.");
+  assertEqual(initiatorLogsAfterStart.length, 0, "Администратор-инициатор не должен получать дублирующий summary-лог старта.");
+  assertEqual(otherMainAdminLogsAfterStart.length, 1, "Другие главные админы должны получить итоговый лог по старту.");
 
   vk.failPeerIds.delete(3002);
   context.action = ACTIONS.ASSIGN_TEAMS_RETRY_FAILED;
@@ -110,14 +112,16 @@ async function testQuestStartAndRetry() {
   const updatedTeamTwo = await getTeamById(env, 2);
   const updatedStationTwo = await getStationById(env, 2);
   const finalState = await getUserState(env, admin.id);
-  const mainAdminLogsAfterRetry = vk.getTextsForPeer(9001).filter((text) => text.includes("[QUEST_RETRY]"));
+  const initiatorLogsAfterRetry = vk.getTextsForPeer(9001).filter((text) => text.includes("Повторная отправка:"));
+  const otherMainAdminLogsAfterRetry = vk.getTextsForPeer(9004).filter((text) => text.includes("Повторная отправка:"));
 
   assertEqual(retryResult.recoveredAssignments.length, 1, "Повторная отправка должна восстановить проблемную команду.");
   assertEqual(retryResult.stillFailedAssignments.length, 0, "После успешного ретрая не должно остаться неуспешных команд.");
   assertEqual(updatedTeamTwo?.status, "on_station", "Вторая команда должна попасть на свою станцию после ретрая.");
   assertEqual(updatedStationTwo?.status, "occupied", "Освободившаяся стартовая станция должна заняться после ретрая.");
   assertEqual(finalState?.state_type, STATE_TYPES.ADMIN_MENU, "После успешного ретрая админ должен вернуться в обычное меню.");
-  assertEqual(mainAdminLogsAfterRetry.length, 1, "Главным админам должен прийти итоговый лог по повторной отправке.");
+  assertEqual(initiatorLogsAfterRetry.length, 0, "Администратор-инициатор не должен получать дублирующий summary-лог повторной отправки.");
+  assertEqual(otherMainAdminLogsAfterRetry.length, 1, "Другие главные админы должны получить итоговый лог по повторной отправке.");
 }
 
 async function testQuestStartSkipsNotFirstStations() {
@@ -160,6 +164,7 @@ async function testQuestStartSkipsNotFirstStations() {
 
 async function seedQuestStartScenario(env) {
   await insertUser(env, { id: 1, vkUserId: "9001", displayName: "Главный админ", isAdmin: 1, stationId: null, teamId: null });
+  await insertUser(env, { id: 5, vkUserId: "9004", displayName: "Главный админ 2", isAdmin: 1, stationId: null, teamId: null });
   await insertTeam(env, { id: 1, teamName: "Команда 1", status: "waiting_start", currentStationId: null });
   await insertTeam(env, { id: 2, teamName: "Команда 2", status: "waiting_start", currentStationId: null });
   await insertTeam(env, { id: 3, teamName: "Команда 3", status: "waiting_start", currentStationId: null });
@@ -172,6 +177,7 @@ async function seedQuestStartScenario(env) {
 
 async function seedQuestStartScenarioWithNotFirst(env) {
   await insertUser(env, { id: 1, vkUserId: "9001", displayName: "Главный админ", isAdmin: 1, stationId: null, teamId: null });
+  await insertUser(env, { id: 4, vkUserId: "9004", displayName: "Главный админ 2", isAdmin: 1, stationId: null, teamId: null });
   await insertTeam(env, { id: 1, teamName: "Команда 1", status: "waiting_start", currentStationId: null });
   await insertTeam(env, { id: 2, teamName: "Команда 2", status: "waiting_start", currentStationId: null });
   await insertStation(env, { id: 1, stationName: "Финишная станция", status: "free", currentTeamId: null, notFirst: 1 });

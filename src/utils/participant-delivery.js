@@ -82,24 +82,37 @@ async function notifyMainAdminsAboutDelivery(context, report) {
 
 function formatDeliveryAdminMessage(report) {
   const { delivery, successfulRecipients, failedRecipients } = report;
-  const statusIcon = failedRecipients.length ? "FAIL" : "OK";
+  const hasNoRecipients = report.results.length === 0;
+  const statusIcon = failedRecipients.length || hasNoRecipients ? "🔴" : "🟢";
   const stationLabel = delivery?.stationName ? `\nСтанция: ${delivery.stationName}` : "";
   const teamLabel = delivery?.teamName ? `\nКоманда: ${delivery.teamName}` : "";
-  const initiatedByLabel = delivery?.initiatedByName ? `\nИсточник: ${delivery.initiatedByName}` : "";
+  const initiatedByLabel = delivery?.initiatedByName
+    ? `\nИсточник: ${formatPersonLink(delivery.initiatedByName, delivery.initiatedByPeerId)}`
+    : "";
   const successLine = successfulRecipients.length
-    ? `\nДоставлено: ${successfulRecipients.map(formatRecipientResult).join("; ")}`
+    ? `\nДоставлено: ${successfulRecipients.map(formatRecipientResult).join(" | ")}`
     : "\nДоставлено: никому";
   const failedLine = failedRecipients.length
-    ? `\nОшибки: ${failedRecipients.map(formatRecipientFailure).join("; ")}`
-    : "\nОшибки: нет";
+    ? `\nОшибка: ${failedRecipients.map(formatRecipientFailure).join("; ")}`
+    : hasNoRecipients
+      ? "\nОшибка: нет"
+      : "";
 
-  return `[${statusIcon}] ${delivery?.label ?? "Доставка участникам"}${teamLabel}${stationLabel}${initiatedByLabel}${successLine}${failedLine}`;
+  return `${statusIcon} ${delivery?.label ?? "Доставка участникам"}${teamLabel}${stationLabel}${initiatedByLabel}${successLine}${failedLine}`;
 }
 
 function formatRecipientResult(recipient) {
-  return `${recipient.displayName} (${recipient.peerId})`;
+  return formatPersonLink(recipient.displayName, recipient.vkUserId ?? recipient.peerId);
 }
 
 function formatRecipientFailure(recipient) {
-  return `${recipient.displayName} (${recipient.peerId}) - ${recipient.errorMessage ?? "неизвестная ошибка"}`;
+  return `${formatPersonLink(recipient.displayName, recipient.vkUserId ?? recipient.peerId)} - ${recipient.errorMessage ?? "неизвестная ошибка"}`;
+}
+
+function formatPersonLink(displayName, vkUserId) {
+  if (!vkUserId) {
+    return displayName;
+  }
+
+  return `[${displayName}](https://vk.com/im/convo/${vkUserId})`;
 }

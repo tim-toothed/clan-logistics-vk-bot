@@ -183,12 +183,13 @@ async function sendParticipantTemplateOrFallback(context, team) {
     ? template.content_items
     : [{ text: PARTICIPANT_WELCOME_MESSAGE, attachments: [] }];
   const deliveryReport = await deliverParticipantContentWithAdminLog(context, {
-    label: "\u041f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0443",
-    stepLabel: "\u0412\u0445\u043e\u0434 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430",
+    label: "Приветственное сообщение участнику",
+    stepLabel: "Вход участника",
     teamId: team.id,
     teamName: team.team_name,
     stationName: null,
     initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
+    initiatedByPeerId: context.peerId,
     recipients: [
       {
         peerId: context.peerId,

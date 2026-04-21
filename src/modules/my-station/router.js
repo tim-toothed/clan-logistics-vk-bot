@@ -15,7 +15,12 @@ import {
 } from "../../db/events-repository.js";
 import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../../db/messages-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
-import { listAdminPeerIdsByStation, listMainAdminUsers, listParticipantUsersByTeam } from "../../db/users-repository.js";
+import {
+  listAdminPeerIdsByStation,
+  listAdminUsersByStation,
+  listMainAdminUsers,
+  listParticipantUsersByTeam,
+} from "../../db/users-repository.js";
 import {
   deliverParticipantContentWithAdminLog,
   formatDeliveryContentForManualRelay,
@@ -190,7 +195,10 @@ async function finishCurrentStation(context, options = {}) {
       await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "delivery_failed", {
         delivery: serializeDeliveryForState(deliveryReport),
       });
-      await notifyMainAdmins(context, formatStationLifecycleMessage("FAIL", team.team_name, station.station_name, delivery.stepLabel));
+      await notifyMainAdmins(
+        context,
+        await buildStationFailureAdminMessage(context, team, station, delivery.stepLabel),
+      );
       await sendStationDeliveryFailedScreen(context.vk, context.peerId, buildFailureScreenOptions(serializeDeliveryForState(deliveryReport)));
       return true;
     }
@@ -220,7 +228,10 @@ async function finishCurrentStation(context, options = {}) {
   }
 
   if (force) {
-    await notifyMainAdmins(context, formatStationLifecycleMessage("FORCE", team.team_name, station.station_name, delivery.stepLabel));
+    await notifyMainAdmins(
+      context,
+      await buildStationForceAdminMessage(context, team, station, delivery.stepLabel),
+    );
     await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_MENU, "idle");
     await sendForceFinishManualRelayScreen(context.vk, context.peerId, {
       teamName: team.team_name,
@@ -269,7 +280,7 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
     if (!deliveryReport.ok) {
       await notifyMainAdmins(
         context,
-        `[FAIL] Не удалось вывести из ожидания команду "${team.team_name}" на станцию "${nextStation.station_name}".`,
+        await buildWaitingTeamFailureAdminMessage(context, team, nextStation),
       );
       continue;
     }
@@ -283,7 +294,7 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
     });
     await notifyMainAdmins(
       context,
-      `[OK] Команда "${team.team_name}" выведена из ожидания на станцию "${nextStation.station_name}".`,
+      formatWaitingTeamTransitionMessage("OK", team.team_name, nextStation.station_name),
     );
   }
 }
@@ -372,6 +383,7 @@ async function buildDeliveryPayload(context, options) {
     teamName: options.team.team_name,
     stationName: options.currentStation?.station_name ?? null,
     initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
+    initiatedByPeerId: context.peerId,
     teamStatus: options.teamStatus,
     resultType: options.resultType,
     targetStationId: options.targetStation?.id ?? null,
@@ -440,7 +452,90 @@ function getStepLabel(resultType, stationName) {
 }
 
 function formatStationLifecycleMessage(statusCode, teamName, stationName, stepLabel) {
-  return `[${statusCode}] Станция "${stationName}" / команда "${teamName}" / шаг: ${stepLabel}`;
+  if (statusCode === "FORCE") {
+    return [
+      `[FORCE] Станция завершена принудительно`,
+      `Команда: ${teamName}`,
+      `Станция: ${stationName}`,
+      `Шаг: ${stepLabel}`,
+    ].join("\n");
+  }
+
+  const prefix = statusCode === "FAIL" ? "🔴" : "🟢";
+  const title = statusCode === "FAIL" ? "Станция не завершена" : "Станция завершена";
+
+  return [
+    `${prefix} ${title}`,
+    `Команда: ${teamName}`,
+    `Станция: ${stationName}`,
+    `Шаг: ${stepLabel}`,
+  ].join("\n");
+}
+
+function formatWaitingTeamTransitionMessage(statusCode, teamName, stationName) {
+  const prefix = statusCode === "FAIL" ? "🔴" : "🟢";
+  const title = statusCode === "FAIL" ? "Команда осталась в ожидании" : "Команда выведена из ожидания";
+
+  return [
+    `${prefix} ${title}`,
+    `Команда: ${teamName}`,
+    `Станция: ${stationName}`,
+  ].join("\n");
+}
+
+async function buildStationFailureAdminMessage(context, team, station, stepLabel) {
+  const [stationAdmins, participants] = await Promise.all([
+    listAdminUsersByStation(context.env, station.id),
+    listParticipantUsersByTeam(context.env, team.id),
+  ]);
+
+  return [
+    "🔴 Станция не завершена",
+    `Команда: ${team.team_name}`,
+    `Станция: ${station.station_name}`,
+    `Шаг: ${stepLabel}`,
+    `Организаторы станции: ${formatUserLinks(stationAdmins)}`,
+    `Участники команды: ${formatUserLinks(participants)}`,
+  ].join("\n");
+}
+
+async function buildWaitingTeamFailureAdminMessage(context, team, station) {
+  const [stationAdmins, participants] = await Promise.all([
+    listAdminUsersByStation(context.env, station.id),
+    listParticipantUsersByTeam(context.env, team.id),
+  ]);
+
+  return [
+    "🔴 Команда осталась в ожидании",
+    `Команда: ${team.team_name}`,
+    `Станция: ${station.station_name}`,
+    `Организаторы станции: ${formatUserLinks(stationAdmins)}`,
+    `Участники команды: ${formatUserLinks(participants)}`,
+  ].join("\n");
+}
+
+async function buildStationForceAdminMessage(context, team, station, stepLabel) {
+  const [stationAdmins, participants] = await Promise.all([
+    listAdminUsersByStation(context.env, station.id),
+    listParticipantUsersByTeam(context.env, team.id),
+  ]);
+
+  return [
+    "[FORCE] Станция завершена принудительно",
+    `Команда: ${team.team_name}`,
+    `Станция: ${station.station_name}`,
+    `Шаг: ${stepLabel}`,
+    `Организаторы станции: ${formatUserLinks(stationAdmins)}`,
+    `Участники команды: ${formatUserLinks(participants)}`,
+  ].join("\n");
+}
+
+function formatUserLinks(users) {
+  if (!Array.isArray(users) || !users.length) {
+    return "не найдены";
+  }
+
+  return users.map((user) => `[${user.displayName}](https://vk.com/im/convo/${user.vkUserId})`).join(" | ");
 }
 
 function serializeDeliveryForState(report) {

@@ -344,20 +344,11 @@ function formatQuestRetryScreenText(result) {
 }
 
 function formatQuestStartSummary(result) {
-  return [
-    "[QUEST_START]",
-    `Стартовали на станции: ${result.startedTeams.length}`,
-    `Переведены в ожидание: ${result.waitingTeams.length}`,
-    `Ошибки доставки: ${result.failedAssignments.length}`,
-  ].join("\n");
+  return `🟢 Старт квеста: станции ${result.startedTeams.length}, ожидание ${result.waitingTeams.length}, ошибки ${result.failedAssignments.length}.`;
 }
 
 function formatQuestRetrySummary(result) {
-  return [
-    "[QUEST_RETRY]",
-    `Успешно восстановлены: ${result.recoveredAssignments.length}`,
-    `Все еще с ошибкой доставки: ${result.stillFailedAssignments.length}`,
-  ].join("\n");
+  return `🟢 Повторная отправка: восстановлено ${result.recoveredAssignments.length}, осталось ошибок ${result.stillFailedAssignments.length}.`;
 }
 
 async function getQuestStartPreconditions(env) {
@@ -424,6 +415,7 @@ async function buildInitialStationDelivery(context, team, station) {
     teamName: team.team_name,
     stationName: station.station_name,
     initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
+    initiatedByPeerId: context.peerId,
     recipients,
     contentItems: template?.content_items?.length
       ? template.content_items
@@ -442,6 +434,7 @@ async function buildInitialWaitingDelivery(context, team) {
     teamName: team.team_name,
     stationName: null,
     initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
+    initiatedByPeerId: context.peerId,
     recipients,
     contentItems: template?.content_items?.length ? template.content_items : WAITING_START_FALLBACK_MESSAGE,
   };
@@ -464,6 +457,10 @@ async function notifyMainAdmins(context, message) {
   const admins = await listMainAdminUsers(context.env);
 
   for (const admin of admins) {
+    if (admin.peerId === context.peerId) {
+      continue;
+    }
+
     try {
       await context.vk.sendText(admin.peerId, message);
     } catch (error) {

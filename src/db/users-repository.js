@@ -193,6 +193,28 @@ export async function listAdminLabelsByStation(env, stationId) {
   return rows.map((row) => row.display_name || getFallbackDisplayName(row.vk_user_id));
 }
 
+export async function listAdminUsersByStation(env, stationId) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT display_name, vk_user_id
+      FROM users
+      WHERE is_admin = 1
+        AND station_id = ?
+      ORDER BY id ASC
+    `,
+    [stationId],
+  );
+
+  return rows
+    .map((row) => ({
+      peerId: Number(row.vk_user_id),
+      vkUserId: Number(row.vk_user_id),
+      displayName: row.display_name || getFallbackDisplayName(row.vk_user_id),
+    }))
+    .filter((row) => row.peerId);
+}
+
 export async function listParticipantPeerIdsByTeam(env, teamId) {
   const rows = await dbAll(
     env,

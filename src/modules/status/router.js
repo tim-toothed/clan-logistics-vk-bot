@@ -3,7 +3,7 @@ import { STATE_TYPES } from "../../app/state-types.js";
 import { getCompletedEventDurationsForStation, getStationProgressSummary, getTeamById } from "../../db/events-repository.js";
 import { getTeams } from "../../db/setup-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
-import { listAdminLabelsByStation, listParticipantUsersByTeam } from "../../db/users-repository.js";
+import { listAdminUsersByStation, listParticipantUsersByTeam } from "../../db/users-repository.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import { sendStatusScreen } from "./screens.js";
 
@@ -39,7 +39,7 @@ async function buildStatusSummary(env) {
     const durations = await getCompletedEventDurationsForStation(env, station.id);
     const currentTeam = station.current_team_id ? await getTeamById(env, station.current_team_id) : null;
     const currentParticipants = currentTeam ? await listParticipantUsersByTeam(env, currentTeam.id) : [];
-    const admins = await listAdminLabelsByStation(env, station.id);
+    const admins = await listAdminUsersByStation(env, station.id);
     const completedCount = Number(station.completed_teams_count ?? 0);
     const remainingCount = Math.max(0, totalTeams - completedCount);
     const durationSummary = formatDurationSummary(station.avg_duration_seconds, durations);
@@ -71,7 +71,7 @@ function buildStationSection({
   totalTeams,
   durationSummary,
 }) {
-  const lines = [`${stationName}${formatStationStatusEmoji(status)}`];
+  const lines = [`${formatStationStatusEmoji(status)}${stationName}`];
 
   if (status === "occupied" && currentTeamName) {
     const participantLinks = formatParticipantLinks(currentParticipants);
@@ -79,7 +79,7 @@ function buildStationSection({
     lines.push(`Текущая команда: ${currentTeamName}${participantSuffix}`);
   }
 
-  lines.push(`Организаторы: ${admins.length ? admins.join(", ") : "не назначены"}`);
+  lines.push(`Организаторы: ${formatParticipantLinks(admins) || "не назначены"}`);
   lines.push(`Осталось команд: ${remainingCount}/${totalTeams}`);
   lines.push(`Среднее время: ${durationSummary}`);
 
@@ -95,11 +95,11 @@ function formatParticipantLinks(participants) {
 function formatStationStatusEmoji(status) {
   switch (status) {
     case "occupied":
-      return "🔴";
+      return "🎯";
     case "done":
-      return "💯";
+      return "✅";
     default:
-      return "🟢";
+      return "🆓";
   }
 }
 

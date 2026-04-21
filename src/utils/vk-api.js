@@ -45,46 +45,27 @@ export function createVkClient(env) {
     },
 
     async uploadMessageDocument(peerId, fileName, fileContents, contentType = "application/json") {
-      const uploadServer = await callVkApi({
-        method: "docs.getMessagesUploadServer",
-        params: {
-          peer_id: peerId,
-        },
+      return uploadMessagesDocument({
         token: env.VK_GROUP_TOKEN,
         version: apiVersion,
+        peerId,
+        fileName,
+        fileContents,
+        contentType,
+        uploadType: "doc",
       });
+    },
 
-      const formData = new FormData();
-      const fileBlob = new Blob([fileContents], { type: contentType });
-
-      formData.set("file", fileBlob, fileName);
-
-      const uploadResponse = await fetch(uploadServer.upload_url, {
-        method: "POST",
-        body: formData,
-      });
-      const uploadData = await uploadResponse.json();
-
-      if (!uploadResponse.ok || uploadData?.error) {
-        throw new Error("Не удалось загрузить файл экспорта в VK.");
-      }
-
-      const savedDocs = await callVkApi({
-        method: "docs.save",
-        params: {
-          file: uploadData.file,
-          title: fileName,
-        },
+    async uploadAudioMessage(peerId, fileName, fileContents, contentType = "audio/ogg") {
+      return uploadMessagesDocument({
         token: env.VK_GROUP_TOKEN,
         version: apiVersion,
+        peerId,
+        fileName,
+        fileContents,
+        contentType,
+        uploadType: "audio_message",
       });
-      const savedDoc = resolveSavedVkDocument(savedDocs);
-
-      if (!savedDoc?.owner_id || !savedDoc?.id) {
-        throw new Error("VK не вернул данные сохраненного документа.");
-      }
-
-      return buildVkAttachmentString("doc", savedDoc.owner_id, savedDoc.id, savedDoc.access_key);
     },
   };
 }
@@ -158,6 +139,58 @@ function createRandomId() {
 function buildVkAttachmentString(type, ownerId, itemId, accessKey) {
   const suffix = accessKey ? `_${accessKey}` : "";
   return `${type}${ownerId}_${itemId}${suffix}`;
+}
+
+async function uploadMessagesDocument({ token, version, peerId, fileName, fileContents, contentType, uploadType }) {
+  const uploadServer = await callVkApi({
+    method: "docs.getMessagesUploadServer",
+    params: {
+      peer_id: peerId,
+      type: uploadType === "audio_message" ? "audio_message" : undefined,
+    },
+    token,
+    version,
+  });
+
+  const formData = new FormData();
+  const fileBlob = new Blob([fileContents], { type: contentType });
+
+  formData.set("file", fileBlob, fileName);
+
+  const uploadResponse = await fetch(uploadServer.upload_url, {
+    method: "POST",
+    body: formData,
+  });
+  const uploadData = await uploadResponse.json();
+
+  if (!uploadResponse.ok || uploadData?.error) {
+    throw new Error(
+      uploadType === "audio_message"
+        ? "Не удалось загрузить аудиосообщение в VK."
+        : "Не удалось загрузить файл в VK.",
+    );
+  }
+
+  const savedDocs = await callVkApi({
+    method: "docs.save",
+    params: {
+      file: uploadData.file,
+      title: fileName,
+    },
+    token,
+    version,
+  });
+  const savedDoc = resolveSavedVkDocument(savedDocs);
+
+  if (!savedDoc?.owner_id || !savedDoc?.id) {
+    throw new Error(
+      uploadType === "audio_message"
+        ? "VK не вернул данные сохранённого аудиосообщения."
+        : "VK не вернул данные сохранённого документа.",
+    );
+  }
+
+  return buildVkAttachmentString(uploadType, savedDoc.owner_id, savedDoc.id, savedDoc.access_key);
 }
 
 function resolveSavedVkDocument(savedDocs) {

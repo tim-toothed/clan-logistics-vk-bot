@@ -75,6 +75,13 @@ export async function replaceStations(env, stationDefinitions) {
           sql: "UPDATE stations SET station_name = ?, not_first = ? WHERE id = ?",
           bindings: [stationName, notFirst, currentStation.id],
         });
+
+        if (currentStation.station_name !== stationName) {
+          statements.push({
+            sql: "UPDATE messages SET title = ? WHERE trigger_type = 'go_to_station' AND station_id = ?",
+            bindings: [`Переход на "${stationName}"`, currentStation.id],
+          });
+        }
       }
 
       continue;

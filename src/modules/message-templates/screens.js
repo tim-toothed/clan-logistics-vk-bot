@@ -49,3 +49,8 @@ export async function sendMessageDeletedScreen(vk, peerId) {
     keyboard: createBackKeyboard(),
   });
 }
+export async function sendMessageTemplateErrorScreen(vk, peerId, errorText) {
+  await vk.sendText(peerId, errorText, {
+    keyboard: createMessageRecordingKeyboard(),
+  });
+}

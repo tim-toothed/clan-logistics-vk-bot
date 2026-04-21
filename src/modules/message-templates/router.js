@@ -10,13 +10,18 @@ import {
   upsertMessageTemplate,
 } from "../../db/messages-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
-import { sendTemplateSequence, buildTemplateChunkFromPayload } from "../../utils/vk-message.js";
+import {
+  buildTemplateChunkFromPayload,
+  prepareTemplateChunkForStorage,
+  sendTemplateSequence,
+} from "../../utils/vk-message.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
   sendBotMessagesMenuScreen,
   sendMessageDeletedScreen,
   sendMessageRecordingContinueScreen,
   sendMessageRecordingStartScreen,
+  sendMessageTemplateErrorScreen,
   sendMessageTemplateActionsScreen,
   sendMessageTriggerSelectScreen,
 } from "./screens.js";
@@ -61,8 +66,21 @@ export async function handleBotMessagesMenuState(context) {
       return openBotMessagesMenu(context);
     }
 
-    for (const item of message.content_items) {
-      await sendTemplateSequence(context.vk, context.peerId, [item]);
+    try {
+      for (const item of message.content_items) {
+        await sendTemplateSequence(context.vk, context.peerId, [item]);
+      }
+    } catch (error) {
+      await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_TEMPLATE_ACTIONS, "idle", {
+        messageId: message.id,
+      });
+      await sendMessageTemplateErrorScreen(
+        context.vk,
+        context.peerId,
+        error instanceof Error ? error.message : "Не удалось показать шаблон сообщения.",
+      );
+      await sendMessageTemplateActionsScreen(context.vk, context.peerId, message.id);
+      return true;
     }
 
     await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_TEMPLATE_ACTIONS, "idle", {
@@ -146,7 +164,20 @@ export async function handleMessageRecordingState(context) {
     return true;
   }
 
-  const updatedItems = [...currentItems, chunk];
+  let storedChunk;
+
+  try {
+    storedChunk = await prepareTemplateChunkForStorage(context.vk, context.peerId, chunk);
+  } catch (error) {
+    await sendMessageTemplateErrorScreen(
+      context.vk,
+      context.peerId,
+      error instanceof Error ? error.message : "Не удалось подготовить вложение для шаблона.",
+    );
+    return true;
+  }
+
+  const updatedItems = [...currentItems, storedChunk];
 
   await setUserState(context.env, context.user.id, STATE_TYPES.MESSAGE_RECORDING, "record", {
     ...statePayload,

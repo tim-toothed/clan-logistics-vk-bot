@@ -81,10 +81,101 @@ export async function startStationForTeam(env, { stationId, teamId, startedByUse
   ]);
 }
 
+export async function claimActiveEventForCompletion(env, { eventId, stationId, claimingUserId }) {
+  const result = await dbRun(
+    env,
+    "UPDATE events SET ended_by_user_id = ? WHERE id = ? AND station_id = ? AND status = 'active' AND ended_by_user_id IS NULL",
+    [claimingUserId, eventId, stationId],
+  );
+
+  return Number(result?.meta?.changes ?? 0) === 1;
+}
+
+export async function releaseActiveEventCompletionClaim(env, { eventId, stationId, claimingUserId }) {
+  await dbRun(
+    env,
+    "UPDATE events SET ended_by_user_id = NULL WHERE id = ? AND station_id = ? AND status = 'active' AND ended_by_user_id = ?",
+    [eventId, stationId, claimingUserId],
+  );
+}
+
+export async function claimNextStationForTeam(env, { stationId, teamId }) {
+  const result = await dbRun(
+    env,
+    "UPDATE stations SET status = 'occupied', current_team_id = ? WHERE id = ? AND status = 'free' AND current_team_id IS NULL",
+    [teamId, stationId],
+  );
+
+  return Number(result?.meta?.changes ?? 0) === 1;
+}
+
+export async function releaseClaimedNextStation(env, { stationId, teamId }) {
+  await dbRun(
+    env,
+    "UPDATE stations SET status = 'free', current_team_id = NULL WHERE id = ? AND status = 'occupied' AND current_team_id = ?",
+    [stationId, teamId],
+  );
+}
+
+export async function claimWaitingTeamAssignment(env, { stationId, teamId }) {
+  const teamResult = await dbRun(
+    env,
+    "UPDATE teams SET current_station_id = ? WHERE id = ? AND status = 'waiting_station' AND current_station_id IS NULL",
+    [stationId, teamId],
+  );
+
+  if (Number(teamResult?.meta?.changes ?? 0) !== 1) {
+    return { ok: false, reason: "team_unavailable" };
+  }
+
+  const stationClaimed = await claimNextStationForTeam(env, { stationId, teamId });
+
+  if (!stationClaimed) {
+    await dbRun(
+      env,
+      "UPDATE teams SET current_station_id = NULL WHERE id = ? AND status = 'waiting_station' AND current_station_id = ?",
+      [teamId, stationId],
+    );
+    return { ok: false, reason: "station_unavailable" };
+  }
+
+  return { ok: true };
+}
+
+export async function finalizeWaitingTeamAssignment(env, { stationId, teamId, startTime }) {
+  await dbBatch(env, [
+    {
+      sql: "UPDATE teams SET status = 'on_station', current_station_id = ? WHERE id = ? AND status = 'waiting_station' AND current_station_id = ?",
+      bindings: [stationId, teamId, stationId],
+    },
+    {
+      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, ?, NULL, 'active', NULL, NULL)",
+      bindings: [stationId, teamId, startTime],
+    },
+  ]);
+}
+
+export async function releaseWaitingTeamAssignment(env, { stationId, teamId }) {
+  await dbBatch(env, [
+    {
+      sql: "DELETE FROM events WHERE station_id = ? AND team_id = ? AND status = 'active' AND ended_by_user_id IS NULL",
+      bindings: [stationId, teamId],
+    },
+    {
+      sql: "UPDATE teams SET current_station_id = NULL WHERE id = ? AND status = 'waiting_station' AND current_station_id = ?",
+      bindings: [teamId, stationId],
+    },
+    {
+      sql: "UPDATE stations SET status = 'free', current_team_id = NULL WHERE id = ? AND status = 'occupied' AND current_team_id = ?",
+      bindings: [stationId, teamId],
+    },
+  ]);
+}
+
 export async function completeStationForTeam(env, { eventId, stationId, teamId, endedByUserId, endTime, stationDone, teamStatus }) {
   await dbBatch(env, [
     {
-      sql: "UPDATE events SET end_time = ?, status = 'completed', ended_by_user_id = ? WHERE id = ?",
+      sql: "UPDATE events SET end_time = ?, status = 'completed', ended_by_user_id = ? WHERE id = ? AND status = 'active'",
       bindings: [endTime, endedByUserId, eventId],
     },
     {
@@ -104,7 +195,7 @@ export async function transitionTeamToNextStation(
 ) {
   await dbBatch(env, [
     {
-      sql: "UPDATE events SET end_time = ?, status = 'completed', ended_by_user_id = ? WHERE id = ?",
+      sql: "UPDATE events SET end_time = ?, status = 'completed', ended_by_user_id = ? WHERE id = ? AND status = 'active'",
       bindings: [endTime, endedByUserId, eventId],
     },
     {

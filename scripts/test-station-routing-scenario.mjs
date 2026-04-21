@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import {
+  claimActiveEventForCompletion,
+  claimNextStationForTeam,
+  claimWaitingTeamAssignment,
   completeStationForTeam,
   getActiveEventForStation,
   getCandidateStationsForTeam,
@@ -10,6 +13,8 @@ import {
   getWaitingTeams,
   hasStationCompletedAllTeams,
   hasTeamCompletedAllStations,
+  releaseClaimedNextStation,
+  releaseWaitingTeamAssignment,
   setTeamStatus,
   startStationForTeam,
   transitionTeamToNextStation,
@@ -27,6 +32,9 @@ async function main() {
   scenarioResults.push(await testStationDoneFlow());
   scenarioResults.push(await testWaitingTeamsReceiveDifferentFreedStations());
   scenarioResults.push(await testAutomaticStartAfterStationAssignment());
+  scenarioResults.push(await testOnlyOneCompletionClaimCanSucceed());
+  scenarioResults.push(await testOnlyOneTeamCanClaimFreeStation());
+  scenarioResults.push(await testWaitingTeamCannotBeAssignedTwice());
 
   for (const result of scenarioResults) {
     console.log(`PASS ${result.name}`);
@@ -353,6 +361,108 @@ async function testAutomaticStartAfterStationAssignment() {
   };
 }
 
+async function testOnlyOneCompletionClaimCanSucceed() {
+  const env = createTestEnv();
+  await seedUsersTeamsStations(env, 1, 1);
+
+  await startStationForTeam(env, {
+    stationId: 1,
+    teamId: 1,
+    startedByUserId: 1,
+    startTime: "2026-04-18T10:00:00.000Z",
+  });
+
+  const activeEvent = await getActiveEventForStation(env, 1);
+
+  if (!activeEvent?.id) {
+    throw new Error("Не удалось создать активное событие для проверки защиты от двойного завершения.");
+  }
+
+  const [firstClaim, secondClaim] = await Promise.all([
+    claimActiveEventForCompletion(env, { eventId: activeEvent.id, stationId: 1, claimingUserId: 1 }),
+    claimActiveEventForCompletion(env, { eventId: activeEvent.id, stationId: 1, claimingUserId: 1 }),
+  ]);
+
+  assertEqual(
+    [firstClaim, secondClaim].filter(Boolean).length,
+    1,
+    "Только один обработчик должен суметь захватить активное событие станции для завершения.",
+  );
+
+  return {
+    name: "4.3 duplicate station finish is blocked by single completion claim",
+    details: [`Результаты захвата события: ${firstClaim}, ${secondClaim}`],
+  };
+}
+
+async function testOnlyOneTeamCanClaimFreeStation() {
+  const env = createTestEnv();
+  await seedUsersTeamsStations(env, 2, 1);
+
+  const [firstClaim, secondClaim] = await Promise.all([
+    claimNextStationForTeam(env, { stationId: 1, teamId: 1 }),
+    claimNextStationForTeam(env, { stationId: 1, teamId: 2 }),
+  ]);
+
+  const station = await getStationById(env, 1);
+  const claimedTeamId = station?.current_team_id ?? null;
+
+  assertEqual(
+    [firstClaim, secondClaim].filter(Boolean).length,
+    1,
+    "Свободную станцию должна суметь занять только одна команда даже при почти одновременном назначении.",
+  );
+  assertIncludes([1, 2], claimedTeamId, "У занятой станции должен остаться только один победивший team_id.");
+
+  await releaseClaimedNextStation(env, { stationId: 1, teamId: claimedTeamId });
+
+  return {
+    name: "4.3 free station can only be claimed once",
+    details: [
+      `Результаты захвата станции: ${firstClaim}, ${secondClaim}`,
+      `Станцию заняла команда: ${claimedTeamId}`,
+    ],
+  };
+}
+
+async function testWaitingTeamCannotBeAssignedTwice() {
+  const env = createTestEnv();
+  await seedUsersTeamsStations(env, 1, 2);
+  await setTeamStatus(env, 1, "waiting_station");
+
+  const [firstClaim, secondClaim] = await Promise.all([
+    claimWaitingTeamAssignment(env, { stationId: 1, teamId: 1 }),
+    claimWaitingTeamAssignment(env, { stationId: 2, teamId: 1 }),
+  ]);
+
+  const successfulClaim = [firstClaim, secondClaim].filter((item) => item.ok);
+  const team = await getTeamById(env, 1);
+
+  assertEqual(
+    successfulClaim.length,
+    1,
+    "Ожидающая команда не должна одновременно закрепляться за двумя станциями.",
+  );
+  assertEqual(team?.status, "waiting_station", "После успешного захвата ожидающая команда должна остаться в waiting_station до подтвержденной отправки.");
+  assertIncludes([1, 2], team?.current_station_id ?? null, "У ожидающей команды должна сохраниться только одна захваченная станция.");
+
+  await releaseWaitingTeamAssignment(env, {
+    stationId: team.current_station_id,
+    teamId: 1,
+  });
+
+  const releasedTeam = await getTeamById(env, 1);
+  assertEqual(releasedTeam?.status, "waiting_station", "После отката захвата команда должна вернуться в waiting_station.");
+
+  return {
+    name: "4.3 waiting team cannot be assigned twice",
+    details: [
+      `Результаты захвата команды: ${JSON.stringify(firstClaim)}, ${JSON.stringify(secondClaim)}`,
+      `Итоговая станция у команды: ${team?.current_station_id}`,
+    ],
+  };
+}
+
 function createTestEnv() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(MIGRATION_SQL);
@@ -422,6 +532,12 @@ function assertDeepEqual(actual, expected, message) {
 
   if (actualJson !== expectedJson) {
     throw new Error(`${message}\nExpected: ${expectedJson}\nActual: ${actualJson}`);
+  }
+}
+
+function assertIncludes(values, expected, message) {
+  if (!values.includes(expected)) {
+    throw new Error(`${message}\nExpected to find: ${expected}\nActual: ${JSON.stringify(values)}`);
   }
 }
 

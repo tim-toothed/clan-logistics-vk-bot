@@ -34,7 +34,11 @@ async function main() {
   await handleMyStationActiveState(context);
 
   const confirmationState = await getUserState(env, organizer.id);
-  assertEqual(confirmationState?.step_key, "confirm_finish", "Перед завершением должен показываться экран подтверждения.");
+  assertEqual(
+    confirmationState?.step_key,
+    "confirm_finish",
+    "Перед завершением должен показываться экран подтверждения.",
+  );
 
   context.action = ACTIONS.STATION_FINISH_CONFIRM;
   context.buttonPayload = { action: ACTIONS.STATION_FINISH_CONFIRM, teamId: 1 };
@@ -46,8 +50,7 @@ async function main() {
   vk.failPeerIds.delete(3001);
   context.action = ACTIONS.STATION_FORCE_FINISH;
   context.buttonPayload = { action: ACTIONS.STATION_FORCE_FINISH, teamId: 1 };
-  const failedState = await getUserState(env, organizer.id);
-  context.userState = failedState;
+  context.userState = await getUserState(env, organizer.id);
 
   await handleMyStationActiveState(context);
 
@@ -77,12 +80,12 @@ async function collectFailurePhaseAssertions(env, vk, organizerUserId) {
   assertEqual(activeEvent?.status, "active", "Активное событие станции должно оставаться active при ошибке доставки.");
   assertEqual(organizerState?.step_key, "delivery_failed", "Организатор должен попасть в аварийный экран после ошибки доставки.");
   assertIncludes(organizerKeyboardActions, ACTIONS.STATION_FORCE_FINISH, "На аварийном экране должна быть кнопка принудительного завершения.");
-  assertSome(mainAdminMessages, (text) => text.includes("[FAIL]"), "Главный админ должен получить FAIL-уведомление о проблеме доставки.");
+  assertSome(mainAdminMessages, (text) => text.includes("Станция не завершена"), "Главный админ должен получить уведомление о проблеме доставки.");
 
   return [
     {
       name: "1. Main admins receive failure notifications",
-      details: mainAdminMessages.filter((text) => text.includes("[FAIL]")),
+      details: mainAdminMessages.filter((text) => text.includes("Станция не завершена")),
     },
     {
       name: "2. Organizer cannot finish station while delivery fails",
@@ -114,17 +117,17 @@ async function collectForcePhaseAssertions(env, vk, organizerUserId) {
   assertEqual(teamTwo?.status, "on_station", "Ожидающая команда должна получить новую станцию и сразу перейти в on_station.");
   assertEqual(activeEvent?.team_id, 2, "После принудительного завершения на станции должно появиться активное событие для ожидавшей команды.");
   assertEqual(organizerState?.step_key, "idle", "Организатор должен вернуться в обычное состояние меню станции.");
-  assertSome(
-    waitingTeamMessages,
-    (text) => text.includes("Станция 1"),
-    "Команда, ожидавшая освобождения станции, должна получить сообщение о переходе на станцию 1.",
-  );
+  assertSome(waitingTeamMessages, (text) => text.includes("Станция 1"), "Ожидающая команда должна получить сообщение о переходе на станцию 1.");
   assertSome(
     organizerMessages,
     (text) => text.includes("принудительно завершена"),
     "Организатор должен получить текст для ручной передачи после принудительного завершения.",
   );
-  assertSome(mainAdminMessages, (text) => text.includes("[FORCE]"), "Главный админ должен получить лог о принудительном завершении.");
+  assertSome(
+    mainAdminMessages,
+    (text) => text.includes("[FORCE]") || text.includes("принудительно завершена"),
+    "Главный админ должен получить лог о принудительном завершении.",
+  );
   assertSome(
     mainAdminMessages,
     (text) => text.includes("выведена из ожидания"),

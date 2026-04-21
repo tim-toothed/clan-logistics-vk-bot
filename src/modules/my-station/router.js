@@ -1,7 +1,11 @@
 import { ACTIONS } from "../../app/action-types.js";
 import { STATE_TYPES } from "../../app/state-types.js";
 import {
+  claimActiveEventForCompletion,
+  claimNextStationForTeam,
+  claimWaitingTeamAssignment,
   completeStationForTeam,
+  finalizeWaitingTeamAssignment,
   getActiveEventForStation,
   getCandidateStationsForTeam,
   getPendingTeamsForStation,
@@ -9,8 +13,10 @@ import {
   getStationById,
   getTeamById,
   getWaitingTeams,
+  releaseActiveEventCompletionClaim,
+  releaseClaimedNextStation,
+  releaseWaitingTeamAssignment,
   setTeamStatus,
-  startStationForTeam,
   transitionTeamToNextStation,
 } from "../../db/events-repository.js";
 import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../../db/messages-repository.js";
@@ -183,16 +189,57 @@ async function finishCurrentStation(context, options = {}) {
 
   const stationDone = pendingTeams.filter((item) => item.id !== team.id).length === 0;
   const teamFinished = remainingStations.length <= 1;
-  const delivery = await prepareTeamDelivery(context, {
+  const completionClaimed = await claimActiveEventForCompletion(context.env, {
+    eventId: activeEvent.id,
+    stationId: station.id,
+    claimingUserId: context.user.id,
+  });
+
+  if (!completionClaimed) {
+    await context.vk.sendText(context.peerId, "Завершение станции уже обрабатывается. Подождите пару секунд.");
+    return true;
+  }
+
+  let delivery = await prepareTeamDelivery(context, {
     team,
     currentStation: station,
     teamFinished,
   });
+  let claimedNextStationId = null;
+
+  while (!force && delivery.resultType === "go_to_station" && delivery.targetStationId) {
+    const stationClaimed = await claimNextStationForTeam(context.env, {
+      stationId: delivery.targetStationId,
+      teamId: team.id,
+    });
+
+    if (stationClaimed) {
+      claimedNextStationId = delivery.targetStationId;
+      break;
+    }
+
+    delivery = await prepareTeamDelivery(context, {
+      team,
+      currentStation: station,
+      teamFinished,
+    });
+  }
 
   if (!force) {
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
     if (!deliveryReport.ok) {
+      if (claimedNextStationId) {
+        await releaseClaimedNextStation(context.env, {
+          stationId: claimedNextStationId,
+          teamId: team.id,
+        });
+      }
+      await releaseActiveEventCompletionClaim(context.env, {
+        eventId: activeEvent.id,
+        stationId: station.id,
+        claimingUserId: context.user.id,
+      });
       await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "delivery_failed", {
         delivery: serializeDeliveryForState(deliveryReport),
       });
@@ -262,7 +309,32 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
   const reservedStationIds = new Set();
 
   for (const team of waitingTeams) {
-    const nextStation = await pickNextFreeStation(context, team.id, reservedStationIds);
+    let nextStation = null;
+
+    while (true) {
+      const candidateStation = await pickNextFreeStation(context, team.id, reservedStationIds);
+
+      if (!candidateStation) {
+        break;
+      }
+
+      const claimResult = await claimWaitingTeamAssignment(context.env, {
+        stationId: candidateStation.id,
+        teamId: team.id,
+      });
+
+      if (claimResult.ok) {
+        nextStation = candidateStation;
+        reservedStationIds.add(candidateStation.id);
+        break;
+      }
+
+      if (claimResult.reason === "team_unavailable") {
+        break;
+      }
+
+      reservedStationIds.add(candidateStation.id);
+    }
 
     if (!nextStation) {
       continue;
@@ -279,6 +351,10 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
     if (!deliveryReport.ok) {
+      await releaseWaitingTeamAssignment(context.env, {
+        stationId: nextStation.id,
+        teamId: team.id,
+      });
       await notifyMainAdmins(
         context,
         await buildWaitingTeamFailureAdminMessage(context, team, nextStation),
@@ -286,11 +362,9 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
       continue;
     }
 
-    reservedStationIds.add(nextStation.id);
-    await startStationForTeam(context.env, {
+    await finalizeWaitingTeamAssignment(context.env, {
       stationId: nextStation.id,
       teamId: team.id,
-      startedByUserId: null,
       startTime: new Date().toISOString(),
     });
     await notifyMainAdmins(

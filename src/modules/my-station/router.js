@@ -25,6 +25,7 @@ import {
   deliverParticipantContentWithAdminLog,
   formatDeliveryContentForManualRelay,
 } from "../../utils/participant-delivery.js";
+import { formatVkMention } from "../../utils/text.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
   sendActiveStationScreen,
@@ -535,7 +536,7 @@ function formatUserLinks(users) {
     return "не найдены";
   }
 
-  return users.map((user) => `[${user.displayName}](https://vk.com/im/convo/${user.vkUserId})`).join(" | ");
+  return users.map((user) => formatVkMention(user.displayName, user.vkUserId)).join(" | ");
 }
 
 function serializeDeliveryForState(report) {

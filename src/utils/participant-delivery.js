@@ -1,4 +1,5 @@
 import { listMainAdminUsers } from "../db/users-repository.js";
+import { formatVkMention } from "./text.js";
 import { sendTemplateSequence } from "./vk-message.js";
 
 export async function deliverParticipantContentWithAdminLog(context, delivery) {
@@ -110,9 +111,5 @@ function formatRecipientFailure(recipient) {
 }
 
 function formatPersonLink(displayName, vkUserId) {
-  if (!vkUserId) {
-    return displayName;
-  }
-
-  return `[${displayName}](https://vk.com/im/convo/${vkUserId})`;
+  return formatVkMention(displayName, vkUserId);
 }

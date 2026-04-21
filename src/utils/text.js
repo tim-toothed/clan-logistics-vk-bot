@@ -63,3 +63,17 @@ export function formatNamedRows(rows, fieldName) {
 
   return rows.map((row, index) => `${index + 1}. ${row[fieldName]}`).join("\n");
 }
+
+export function formatVkMention(displayName, vkUserId) {
+  const safeDisplayName = String(displayName ?? "").replace(/[|\]]/gu, "").trim();
+
+  if (!vkUserId) {
+    return safeDisplayName || "Неизвестный пользователь";
+  }
+
+  if (!safeDisplayName) {
+    return `[id${vkUserId}|id${vkUserId}]`;
+  }
+
+  return `[id${vkUserId}|${safeDisplayName}]`;
+}

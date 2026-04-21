@@ -3,6 +3,7 @@ import { STATE_TYPES } from "../../app/state-types.js";
 import { getCompletedEventDurationsForStation, getStationProgressSummary, getTeamById } from "../../db/events-repository.js";
 import { getTeams } from "../../db/setup-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
+import { formatVkMention } from "../../utils/text.js";
 import { listAdminUsersByStation, listParticipantUsersByTeam } from "../../db/users-repository.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import { sendStatusScreen } from "./screens.js";
@@ -88,7 +89,7 @@ function buildStationSection({
 
 function formatParticipantLinks(participants) {
   return participants
-    .map((participant) => `[${participant.displayName}](https://vk.com/im/convo/${participant.vkUserId})`)
+    .map((participant) => formatVkMention(participant.displayName, participant.vkUserId))
     .join(" | ");
 }
 

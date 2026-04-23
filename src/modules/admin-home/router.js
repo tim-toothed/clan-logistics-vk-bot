@@ -2,14 +2,13 @@ import { ACTIONS } from "../../app/action-types.js";
 import { clearUserState } from "../../db/user-state-repository.js";
 import { resetUserRole } from "../../db/users-repository.js";
 import { openMyStationMenu } from "../my-station/router.js";
-import { toDisplayCase } from "../../utils/text.js";
 import { openBotMessagesMenu } from "../message-templates/router.js";
 import { openStationsTeamsMenu } from "../setup-lists/router.js";
 import { sendParticipantIdleScreen, sendWhoAreYouScreen } from "../welcome/screens.js";
 import { openAssignTeamsConfirm } from "../assign-teams/router.js";
 import { openResetConfirm } from "../reset/router.js";
 import { openStatusScreen } from "../status/router.js";
-import { sendAdminMenuPlaceholderScreen, sendSectionInDevelopmentScreen } from "./screens.js";
+import { sendAdminMenuScreen } from "./screens.js";
 
 const COMMON_ADMIN_MENU_BUTTONS = new Set([
   "статистика",
@@ -73,13 +72,18 @@ export async function handleAdminMenuState(context) {
   const availableButtons = context.user?.station_id ? STATION_ADMIN_MENU_BUTTONS : MAIN_ADMIN_MENU_BUTTONS;
 
   if (!availableButtons.has(context.input)) {
-    await sendAdminMenuPlaceholderScreen(context.vk, context.peerId, { env: context.env, user: context.user });
+    await sendAdminMenuScreen(context.vk, context.peerId, {
+      env: context.env,
+      user: context.user,
+      message: "Выберите раздел из меню.",
+    });
     return true;
   }
 
-  await sendSectionInDevelopmentScreen(context.vk, context.peerId, toDisplayCase(context.input), {
+  await sendAdminMenuScreen(context.vk, context.peerId, {
     env: context.env,
     user: context.user,
+    message: "Выберите раздел из меню.",
   });
   return true;
 }

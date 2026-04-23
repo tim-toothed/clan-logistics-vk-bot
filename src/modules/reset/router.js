@@ -11,8 +11,15 @@ import {
 } from "../../db/event-backup-repository.js";
 import { deleteAllMessages } from "../../db/messages-repository.js";
 import { deleteTeamsAndStations, resetEventData } from "../../db/events-repository.js";
-import { setUserState } from "../../db/user-state-repository.js";
-import { listAllAdminPeerIds, resetUsersEventData } from "../../db/users-repository.js";
+import { clearUserStates, setUserState } from "../../db/user-state-repository.js";
+import {
+  listAllAdminPeerIds,
+  listAssignedParticipantUsers,
+  listMainAdminUsers,
+  listStationAdminUsers,
+  resetStationAdminsAndParticipants,
+  resetUsersEventData,
+} from "../../db/users-repository.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
   sendImportAdminOnlyScreen,
@@ -25,6 +32,7 @@ import {
   sendResetCompletedScreen,
   sendResetConfirmScreen,
   sendResetMenuScreen,
+  sendResetUsersAssignmentsLogScreen,
 } from "./screens.js";
 
 const BACKUP_FILE_EXTENSION = ".json.gz";
@@ -47,6 +55,12 @@ export async function handleResetConfirmState(context) {
     if (context.action === ACTIONS.OPEN_RESET_ACTIVITY_HISTORY || context.input === "история активности") {
       await setUserState(context.env, context.user.id, STATE_TYPES.RESET_CONFIRM, "activity_history");
       await sendResetConfirmScreen(context.vk, context.peerId, "activity_history");
+      return true;
+    }
+
+    if (context.action === ACTIONS.OPEN_RESET_USERS_ASSIGNMENTS || context.input === "участники и орги") {
+      await setUserState(context.env, context.user.id, STATE_TYPES.RESET_CONFIRM, "users_assignments");
+      await sendResetConfirmScreen(context.vk, context.peerId, "users_assignments");
       return true;
     }
 
@@ -75,6 +89,57 @@ export async function handleResetConfirmState(context) {
     await resetEventData(context.env);
     await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
     await sendResetCompletedScreen(context.vk, context.peerId, "История активности удалена. Команды, станции и сообщения сохранены.");
+    return true;
+  }
+
+  if (context.userState?.step_key === "users_assignments") {
+    if (context.action !== ACTIONS.RESET_CONFIRM_USERS_ASSIGNMENTS && context.input !== "да") {
+      await sendResetConfirmScreen(context.vk, context.peerId, "users_assignments");
+      return true;
+    }
+
+    const [stationAdmins, participants, mainAdmins] = await Promise.all([
+      listStationAdminUsers(context.env),
+      listAssignedParticipantUsers(context.env),
+      listMainAdminUsers(context.env),
+    ]);
+
+    await clearUserStates(context.env, [...stationAdmins.map((user) => user.id), ...participants.map((user) => user.id)]);
+    await resetStationAdminsAndParticipants(context.env);
+
+    await notifyUsersAboutAssignmentsReset(
+      context,
+      stationAdmins,
+      'Основной админ сбросил организаторов со всех станций. Если хотите зайти снова отправьте "/start" или "Начать"',
+    );
+    await notifyUsersAboutAssignmentsReset(
+      context,
+      participants,
+      'Участники сброшены из команд. Если хотите зайти снова отправьте "/start" или "Начать"',
+    );
+
+    const counts = {
+      stationAdmins: stationAdmins.length,
+      participants: participants.length,
+    };
+    const initiatorWasReset = stationAdmins.some((user) => user.id === context.user.id) || participants.some((user) => user.id === context.user.id);
+
+    for (const admin of mainAdmins) {
+      if (admin.peerId === context.peerId) {
+        continue;
+      }
+      await sendResetUsersAssignmentsLogScreen(context.vk, admin.peerId, counts, true);
+    }
+
+    if (!initiatorWasReset) {
+      await setUserState(context.env, context.user.id, STATE_TYPES.ADMIN_MENU, "idle");
+      await sendResetCompletedScreen(
+        context.vk,
+        context.peerId,
+        `Сброшены привязки пользователей.\n\nОрганизаторов со станций: ${counts.stationAdmins}\nУчастников из команд: ${counts.participants}`,
+      );
+    }
+
     return true;
   }
 
@@ -298,4 +363,17 @@ function getImportDocumentExtension(document) {
   }
 
   return "";
+}
+
+async function notifyUsersAboutAssignmentsReset(context, users, message) {
+  for (const user of users) {
+    try {
+      await context.vk.sendText(user.peerId, message);
+    } catch (error) {
+      console.error("Failed to notify user about assignment reset", error, {
+        peerId: user.peerId,
+        userId: user.id,
+      });
+    }
+  }
 }

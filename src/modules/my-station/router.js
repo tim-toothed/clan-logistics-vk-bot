@@ -31,7 +31,7 @@ import {
   deliverParticipantContentWithAdminLog,
   formatDeliveryContentForManualRelay,
 } from "../../utils/participant-delivery.js";
-import { appendStationPreparationNotice, STATION_READY_TEXT } from "../../utils/station-phase.js";
+import { appendStationPreparationNotice, getStationReadyItems } from "../../utils/station-phase.js";
 import { formatVkMention } from "../../utils/text.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
@@ -531,7 +531,9 @@ async function buildDeliveryPayload(context, options) {
     options.targetStation ? options.targetStation.id : null,
   );
   const baseItems = template?.content_items?.length ? template.content_items : options.fallbackContent;
-  const contentItems = options.resultType === "go_to_station" ? appendStationPreparationNotice(baseItems) : baseItems;
+  const contentItems = options.resultType === "go_to_station"
+    ? await appendStationPreparationNotice(context.env, baseItems)
+    : baseItems;
 
   return {
     label: getDeliveryLabel(options.resultType),
@@ -552,6 +554,7 @@ async function buildDeliveryPayload(context, options) {
 
 async function buildReadyDelivery(context, options) {
   const recipients = await listParticipantUsersByTeam(context.env, options.team.id);
+  const contentItems = await getStationReadyItems(context.env);
 
   return {
     label: "Организатор готов принимать",
@@ -566,12 +569,7 @@ async function buildReadyDelivery(context, options) {
     targetStationId: options.station.id,
     targetStationName: options.station.station_name,
     recipients,
-    contentItems: [
-      {
-        text: STATION_READY_TEXT,
-        attachments: [],
-      },
-    ],
+    contentItems,
   };
 }
 

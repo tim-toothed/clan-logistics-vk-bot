@@ -177,6 +177,29 @@ export async function listMainAdminUsers(env) {
     .filter((row) => row.peerId);
 }
 
+export async function listStationAdminUsers(env) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT id, vk_user_id, display_name, station_id
+      FROM users
+      WHERE is_admin = 1
+        AND station_id IS NOT NULL
+      ORDER BY id ASC
+    `,
+  );
+
+  return rows
+    .map((row) => ({
+      id: Number(row.id),
+      peerId: Number(row.vk_user_id),
+      vkUserId: Number(row.vk_user_id),
+      displayName: row.display_name || getFallbackDisplayName(row.vk_user_id),
+      stationId: row.station_id === null ? null : Number(row.station_id),
+    }))
+    .filter((row) => row.id && row.peerId);
+}
+
 export async function listAdminLabelsByStation(env, stationId) {
   const rows = await dbAll(
     env,
@@ -252,6 +275,29 @@ export async function listParticipantUsersByTeam(env, teamId) {
     .filter((row) => row.peerId);
 }
 
+export async function listAssignedParticipantUsers(env) {
+  const rows = await dbAll(
+    env,
+    `
+      SELECT id, vk_user_id, display_name, team_id
+      FROM users
+      WHERE is_admin = 0
+        AND team_id IS NOT NULL
+      ORDER BY id ASC
+    `,
+  );
+
+  return rows
+    .map((row) => ({
+      id: Number(row.id),
+      peerId: Number(row.vk_user_id),
+      vkUserId: Number(row.vk_user_id),
+      displayName: row.display_name || getFallbackDisplayName(row.vk_user_id),
+      teamId: row.team_id === null ? null : Number(row.team_id),
+    }))
+    .filter((row) => row.id && row.peerId);
+}
+
 export async function resetUsersEventData(env) {
   await dbRun(
     env,
@@ -259,6 +305,23 @@ export async function resetUsersEventData(env) {
       UPDATE users
       SET station_id = NULL,
           team_id = NULL
+    `,
+  );
+}
+
+export async function resetStationAdminsAndParticipants(env) {
+  await dbRun(
+    env,
+    `
+      UPDATE users
+      SET is_admin = CASE
+            WHEN station_id IS NOT NULL THEN 0
+            ELSE is_admin
+          END,
+          station_id = NULL,
+          team_id = NULL
+      WHERE station_id IS NOT NULL
+         OR team_id IS NOT NULL
     `,
   );
 }

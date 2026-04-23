@@ -34,6 +34,19 @@ export async function clearUserState(env, userId) {
   await dbRun(env, "DELETE FROM user_state WHERE user_id = ?", [userId]);
 }
 
+export async function clearUserStates(env, userIds) {
+  const normalizedUserIds = Array.isArray(userIds)
+    ? [...new Set(userIds.map((userId) => Number(userId)).filter((userId) => Number.isInteger(userId) && userId > 0))]
+    : [];
+
+  if (!normalizedUserIds.length) {
+    return;
+  }
+
+  const placeholders = normalizedUserIds.map(() => "?").join(", ");
+  await dbRun(env, `DELETE FROM user_state WHERE user_id IN (${placeholders})`, normalizedUserIds);
+}
+
 function safeParseJson(value) {
   if (!value) {
     return null;

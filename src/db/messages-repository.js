@@ -5,6 +5,8 @@ export const MESSAGE_TRIGGER_TYPES = {
   PARTICIPANT_WELCOME: "participant_welcome",
   GO_TO_STATION: "go_to_station",
   WAIT_FOR_STATION: "wait_for_station",
+  WAIT_FOR_STATION_ENTRY: "wait_for_station_entry",
+  STATION_READY: "station_ready_message",
   TEAM_FINISHED_ALL: "team_finished_all",
 };
 
@@ -59,8 +61,10 @@ export async function listMessagesForMenu(env) {
           WHEN 'bot_start_message' THEN 1
           WHEN 'participant_welcome' THEN 2
           WHEN 'wait_for_station' THEN 3
-          WHEN 'go_to_station' THEN 4
-          WHEN 'team_finished_all' THEN 5
+          WHEN 'wait_for_station_entry' THEN 4
+          WHEN 'station_ready_message' THEN 5
+          WHEN 'go_to_station' THEN 6
+          WHEN 'team_finished_all' THEN 7
           ELSE 99
         END,
         m.id ASC
@@ -148,6 +152,18 @@ export function listBaseMessageTriggerOptions() {
       label: "Сообщение об ожидании",
     },
     {
+      triggerType: MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION_ENTRY,
+      stationId: null,
+      title: "Ожидайте входа на станцию",
+      label: "Ожидайте входа на станцию",
+    },
+    {
+      triggerType: MESSAGE_TRIGGER_TYPES.STATION_READY,
+      stationId: null,
+      title: "Станция готова",
+      label: "Станция готова",
+    },
+    {
       triggerType: MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL,
       stationId: null,
       title: "После последней станции",
@@ -204,6 +220,14 @@ function buildDisplayTitle(row) {
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION) {
     return "Сообщение об ожидании";
+  }
+
+  if (row.trigger_type === MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION_ENTRY) {
+    return "Ожидайте входа на станцию";
+  }
+
+  if (row.trigger_type === MESSAGE_TRIGGER_TYPES.STATION_READY) {
+    return "Станция готова";
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL) {

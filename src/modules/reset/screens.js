@@ -13,9 +13,15 @@ export async function sendResetConfirmScreen(vk, peerId, resetKind) {
   const message =
     resetKind === "activity_history"
       ? "Вы хотите удалить всю историю активности текущего мероприятия? Будут очищены только events, а команды, станции, сообщения и привязки пользователей сохранятся."
+      : resetKind === "users_assignments"
+        ? "Вы хотите сбросить всех участников из команд и всех организаторов со станций? Главные админы без станции не будут сброшены."
       : "Вы хотите удалить все данные о текущем мероприятии?";
   const confirmAction =
-    resetKind === "activity_history" ? ACTIONS.RESET_CONFIRM_ACTIVITY_HISTORY : ACTIONS.RESET_CONFIRM_ALL_DATA;
+    resetKind === "activity_history"
+      ? ACTIONS.RESET_CONFIRM_ACTIVITY_HISTORY
+      : resetKind === "users_assignments"
+        ? ACTIONS.RESET_CONFIRM_USERS_ASSIGNMENTS
+        : ACTIONS.RESET_CONFIRM_ALL_DATA;
 
   await vk.sendText(peerId, message, {
     keyboard: createResetConfirmKeyboard(confirmAction),
@@ -26,6 +32,16 @@ export async function sendResetCompletedScreen(vk, peerId, message) {
   await vk.sendText(peerId, message, {
     keyboard: createAdminMenuKeyboard(),
   });
+}
+
+export async function sendResetUsersAssignmentsLogScreen(vk, peerId, counts, withAdminKeyboard = true) {
+  await vk.sendText(
+    peerId,
+    `Сброшены привязки пользователей.\n\nОрганизаторов со станций: ${counts.stationAdmins}\nУчастников из команд: ${counts.participants}`,
+    {
+      keyboard: withAdminKeyboard ? createAdminMenuKeyboard() : undefined,
+    },
+  );
 }
 
 export async function sendResetBackupFailedScreen(vk, peerId) {

@@ -134,10 +134,10 @@ export async function startQuest(context, options = {}) {
     const team = teams[index];
     const station = stations[index];
     const delivery = await buildInitialStationDelivery(context, team, station);
-    delivery.contentItems = appendStationPreparationNotice(delivery.contentItems);
+    delivery.contentItems = await appendStationPreparationNotice(context.env, delivery.contentItems);
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
-    if (!deliveryReport.ok) {
+    if (!isSuccessfulQuestDelivery(deliveryReport)) {
       failedAssignments.push(createFailedAssignment(team, {
         stationId: station.id,
         stationName: station.station_name,
@@ -163,7 +163,7 @@ export async function startQuest(context, options = {}) {
     const delivery = await buildInitialWaitingDelivery(context, team);
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
-    if (!deliveryReport.ok) {
+    if (!isSuccessfulQuestDelivery(deliveryReport)) {
       failedAssignments.push(createFailedAssignment(team, {
         stationId: null,
         stationName: null,
@@ -226,12 +226,12 @@ export async function retryFailedQuestAssignments(context) {
       : await buildInitialWaitingDelivery(context, team);
 
     if (station) {
-      delivery.contentItems = appendStationPreparationNotice(delivery.contentItems);
+      delivery.contentItems = await appendStationPreparationNotice(context.env, delivery.contentItems);
     }
 
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
-    if (!deliveryReport.ok) {
+    if (!isSuccessfulQuestDelivery(deliveryReport)) {
       stillFailedAssignments.push(
         createFailedAssignment(team, {
           stationId: station?.id ?? null,
@@ -482,6 +482,10 @@ function createFailedAssignment(team, options) {
     stationName: options.stationName,
     deliveryKind: options.deliveryKind,
   };
+}
+
+function isSuccessfulQuestDelivery(report) {
+  return Boolean(report?.ok) && Number(report?.successfulRecipients?.length ?? 0) > 0;
 }
 
 function shuffleArray(items, randomFn = Math.random) {

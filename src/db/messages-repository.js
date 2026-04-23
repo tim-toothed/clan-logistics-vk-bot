@@ -136,8 +136,8 @@ export function listBaseMessageTriggerOptions() {
     {
       triggerType: MESSAGE_TRIGGER_TYPES.BOT_START,
       stationId: null,
-      title: "Стартовое сообщение бота",
-      label: "Стартовое сообщение бота",
+      title: "При 1-м запуске бота",
+      label: "При 1-м запуске бота",
     },
     {
       triggerType: MESSAGE_TRIGGER_TYPES.PARTICIPANT_WELCOME,
@@ -148,26 +148,26 @@ export function listBaseMessageTriggerOptions() {
     {
       triggerType: MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION,
       stationId: null,
-      title: "Сообщение об ожидании",
-      label: "Сообщение об ожидании",
+      title: "Когда нет свободных станций",
+      label: "Когда нет свободных станций",
     },
     {
       triggerType: MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION_ENTRY,
       stationId: null,
-      title: "Ожидайте входа на станцию",
-      label: "Ожидайте входа на станцию",
+      title: "Когда орг еще не готов принять",
+      label: "Когда орг еще не готов принять",
     },
     {
       triggerType: MESSAGE_TRIGGER_TYPES.STATION_READY,
       stationId: null,
-      title: "Станция готова",
-      label: "Станция готова",
+      title: "Когда орг готов принять",
+      label: "Когда орг готов принять",
     },
     {
       triggerType: MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL,
       stationId: null,
-      title: "После последней станции",
-      label: "После последней станции",
+      title: "Когда станции пройдены",
+      label: "Когда станции пройдены",
     },
   ];
 }
@@ -211,7 +211,7 @@ function buildDisplayTitle(row) {
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.BOT_START) {
-    return "Стартовое сообщение бота";
+    return "При 1-м запуске бота";
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.PARTICIPANT_WELCOME) {
@@ -219,19 +219,19 @@ function buildDisplayTitle(row) {
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION) {
-    return "Сообщение об ожидании";
+    return "Когда нет свободных станций";
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.WAIT_FOR_STATION_ENTRY) {
-    return "Ожидайте входа на станцию";
+    return "Когда орг еще не готов принять";
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.STATION_READY) {
-    return "Станция готова";
+    return "Когда орг готов принять";
   }
 
   if (row.trigger_type === MESSAGE_TRIGGER_TYPES.TEAM_FINISHED_ALL) {
-    return "После последней станции";
+    return "Когда станции пройдены";
   }
 
   return row.title;

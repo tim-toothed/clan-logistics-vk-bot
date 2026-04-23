@@ -74,7 +74,7 @@ function buildStationSection({
 }) {
   const lines = [`${formatStationStatusEmoji(status)}${stationName}`];
 
-  if (status === "occupied" && currentTeamName) {
+  if ((status === "preparing" || status === "occupied") && currentTeamName) {
     const participantLinks = formatParticipantLinks(currentParticipants);
     const participantSuffix = participantLinks ? ` (${participantLinks})` : "";
     lines.push(`Текущая команда: ${currentTeamName}${participantSuffix}`);
@@ -95,6 +95,8 @@ function formatParticipantLinks(participants) {
 
 function formatStationStatusEmoji(status) {
   switch (status) {
+    case "preparing":
+      return "🛠";
     case "occupied":
       return "🎯";
     case "done":

@@ -2,6 +2,7 @@ import { ACTIONS } from "../../app/action-types.js";
 import { createButtonsKeyboard, createKeyboard } from "../../ui/core-keyboards.js";
 
 const LABEL_BACK = "Назад";
+const LABEL_READY = "Готов принимать";
 const LABEL_FINISH_STATION = "Завершить станцию";
 const LABEL_CONFIRM_FINISH = "Да, команда прошла";
 const LABEL_FORCE_FINISH = "Принудительно завершить";
@@ -12,6 +13,25 @@ export function createMyStationBackKeyboard() {
 
 export function createIdleStationKeyboard() {
   return createMyStationBackKeyboard();
+}
+
+export function createPreparingStationKeyboard(teamId) {
+  return createKeyboard([
+    [
+      {
+        label: LABEL_READY,
+        color: "primary",
+        payload: { action: ACTIONS.STATION_READY, teamId },
+      },
+    ],
+    [
+      {
+        label: LABEL_BACK,
+        color: "secondary",
+        payload: { action: ACTIONS.BACK_TO_ADMIN_MENU },
+      },
+    ],
+  ]);
 }
 
 export function createActiveStationKeyboard(teamId) {

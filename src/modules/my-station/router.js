@@ -13,10 +13,10 @@ import {
   getStationById,
   getTeamById,
   getWaitingTeams,
+  markPreparedStationReady,
   releaseActiveEventCompletionClaim,
   releaseClaimedNextStation,
   releaseWaitingTeamAssignment,
-  setTeamStatus,
   transitionTeamToNextStation,
 } from "../../db/events-repository.js";
 import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../../db/messages-repository.js";
@@ -31,6 +31,7 @@ import {
   deliverParticipantContentWithAdminLog,
   formatDeliveryContentForManualRelay,
 } from "../../utils/participant-delivery.js";
+import { appendStationPreparationNotice, STATION_READY_TEXT } from "../../utils/station-phase.js";
 import { formatVkMention } from "../../utils/text.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import {
@@ -39,6 +40,7 @@ import {
   sendForceFinishManualRelayScreen,
   sendIdleStationScreen,
   sendMyStationUnavailableScreen,
+  sendPreparingStationScreen,
   sendStationDeliveryFailedScreen,
 } from "./screens.js";
 
@@ -64,9 +66,12 @@ export async function openMyStationMenu(context) {
     return true;
   }
 
-  const activeEvent = await getActiveEventForStation(context.env, stationId);
+  const [station, activeEvent] = await Promise.all([
+    getStationById(context.env, stationId),
+    getActiveEventForStation(context.env, stationId),
+  ]);
 
-  if (!activeEvent) {
+  if (!station || !activeEvent) {
     await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_MENU, "idle");
     await sendIdleStationScreen(context.vk, context.peerId);
     return true;
@@ -74,10 +79,24 @@ export async function openMyStationMenu(context) {
 
   const activeTeam = await getTeamById(context.env, activeEvent.team_id);
 
+  if (!activeTeam) {
+    await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_MENU, "idle");
+    await sendIdleStationScreen(context.vk, context.peerId);
+    return true;
+  }
+
+  if (isPreparingStation(station, activeEvent)) {
+    await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "preparing", {
+      teamId: activeEvent.team_id,
+    });
+    await sendPreparingStationScreen(context.vk, context.peerId, activeTeam.team_name, activeTeam.id);
+    return true;
+  }
+
   await setUserState(context.env, context.user.id, STATE_TYPES.MY_STATION_ACTIVE, "active", {
     teamId: activeEvent.team_id,
   });
-  await sendActiveStationScreen(context.vk, context.peerId, activeTeam?.team_name ?? "Неизвестная команда", activeEvent.team_id);
+  await sendActiveStationScreen(context.vk, context.peerId, activeTeam.team_name, activeTeam.id);
   return true;
 }
 
@@ -100,6 +119,10 @@ export async function handleMyStationActiveState(context) {
 
   if (context.action === ACTIONS.STATION_FINISH_CANCEL) {
     return openMyStationMenu(context);
+  }
+
+  if (context.action === ACTIONS.STATION_READY) {
+    return startPreparedStation(context);
   }
 
   if (context.action === ACTIONS.STATION_FINISH) {
@@ -142,9 +165,12 @@ async function askFinishConfirmation(context) {
     return true;
   }
 
-  const activeEvent = await getActiveEventForStation(context.env, stationId);
+  const [station, activeEvent] = await Promise.all([
+    getStationById(context.env, stationId),
+    getActiveEventForStation(context.env, stationId),
+  ]);
 
-  if (!activeEvent) {
+  if (!station || !activeEvent || isPreparingStation(station, activeEvent)) {
     return openMyStationMenu(context);
   }
 
@@ -161,6 +187,63 @@ async function askFinishConfirmation(context) {
   return true;
 }
 
+async function startPreparedStation(context) {
+  const stationId = context.user.station_id;
+
+  if (!stationId) {
+    await sendMyStationUnavailableScreen(context.vk, context.peerId);
+    return true;
+  }
+
+  const [station, activeEvent] = await Promise.all([
+    getStationById(context.env, stationId),
+    getActiveEventForStation(context.env, stationId),
+  ]);
+
+  if (!station || !activeEvent || !isPreparingStation(station, activeEvent)) {
+    return openMyStationMenu(context);
+  }
+
+  const team = await getTeamById(context.env, activeEvent.team_id);
+
+  if (!team) {
+    return openMyStationMenu(context);
+  }
+
+  const delivery = await buildReadyDelivery(context, {
+    team,
+    station,
+  });
+  const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
+
+  if (!deliveryReport.ok) {
+    await notifyMainAdmins(
+      context,
+      await buildStationReadyFailureAdminMessage(context, team, station),
+    );
+    await context.vk.sendText(
+      context.peerId,
+      `Не удалось отправить команде "${team.team_name}" сообщение о готовности станции. Попробуйте ещё раз.`,
+    );
+    return openMyStationMenu(context);
+  }
+
+  const started = await markPreparedStationReady(context.env, {
+    stationId: station.id,
+    teamId: team.id,
+    startedByUserId: context.user.id,
+    startTime: new Date().toISOString(),
+  });
+
+  if (!started) {
+    await context.vk.sendText(context.peerId, "Станция уже запущена или больше недоступна.");
+    return openMyStationMenu(context);
+  }
+
+  await notifyMainAdmins(context, formatStationStartedMessage(team.team_name, station.station_name));
+  return openMyStationMenu(context);
+}
+
 async function finishCurrentStation(context, options = {}) {
   const stationId = context.user.station_id;
   const force = options.force === true;
@@ -172,7 +255,7 @@ async function finishCurrentStation(context, options = {}) {
 
   const activeEvent = await getActiveEventForStation(context.env, stationId);
 
-  if (!activeEvent) {
+  if (!activeEvent || !activeEvent.start_time) {
     return openMyStationMenu(context);
   }
 
@@ -261,7 +344,6 @@ async function finishCurrentStation(context, options = {}) {
       endedByUserId: context.user.id,
       endTime: new Date().toISOString(),
       stationDone,
-      startTime: new Date().toISOString(),
     });
   } else {
     await completeStationForTeam(context.env, {
@@ -365,7 +447,6 @@ async function notifyWaitingTeamsAboutFreeStations(context) {
     await finalizeWaitingTeamAssignment(context.env, {
       stationId: nextStation.id,
       teamId: team.id,
-      startTime: new Date().toISOString(),
     });
     await notifyMainAdmins(
       context,
@@ -449,7 +530,8 @@ async function buildDeliveryPayload(context, options) {
     options.triggerType,
     options.targetStation ? options.targetStation.id : null,
   );
-  const contentItems = template?.content_items?.length ? template.content_items : options.fallbackContent;
+  const baseItems = template?.content_items?.length ? template.content_items : options.fallbackContent;
+  const contentItems = options.resultType === "go_to_station" ? appendStationPreparationNotice(baseItems) : baseItems;
 
   return {
     label: getDeliveryLabel(options.resultType),
@@ -465,6 +547,31 @@ async function buildDeliveryPayload(context, options) {
     targetStationName: options.targetStation?.station_name ?? null,
     recipients: options.recipients,
     contentItems,
+  };
+}
+
+async function buildReadyDelivery(context, options) {
+  const recipients = await listParticipantUsersByTeam(context.env, options.team.id);
+
+  return {
+    label: "Организатор готов принимать",
+    stepLabel: `Станция "${options.station.station_name}" готова принимать`,
+    teamId: options.team.id,
+    teamName: options.team.team_name,
+    stationName: options.station.station_name,
+    initiatedByName: context.user?.display_name ?? `VK ${context.peerId}`,
+    initiatedByPeerId: context.peerId,
+    teamStatus: "on_station",
+    resultType: "station_ready",
+    targetStationId: options.station.id,
+    targetStationName: options.station.station_name,
+    recipients,
+    contentItems: [
+      {
+        text: STATION_READY_TEXT,
+        attachments: [],
+      },
+    ],
   };
 }
 
@@ -500,6 +607,10 @@ async function notifyMainAdmins(context, message) {
   }
 }
 
+function isPreparingStation(station, activeEvent) {
+  return station?.status === "preparing" || activeEvent?.start_time === null;
+}
+
 function getDeliveryLabel(resultType) {
   if (resultType === "finished") {
     return "Финальное сообщение команде";
@@ -529,7 +640,7 @@ function getStepLabel(resultType, stationName) {
 function formatStationLifecycleMessage(statusCode, teamName, stationName, stepLabel) {
   if (statusCode === "FORCE") {
     return [
-      `[FORCE] Станция завершена принудительно`,
+      "[FORCE] Станция завершена принудительно",
       `Команда: ${teamName}`,
       `Станция: ${stationName}`,
       `Шаг: ${stepLabel}`,
@@ -558,6 +669,14 @@ function formatWaitingTeamTransitionMessage(statusCode, teamName, stationName) {
   ].join("\n");
 }
 
+function formatStationStartedMessage(teamName, stationName) {
+  return [
+    "🟢 Станция началась",
+    `Команда: ${teamName}`,
+    `Станция: ${stationName}`,
+  ].join("\n");
+}
+
 async function buildStationFailureAdminMessage(context, team, station, stepLabel) {
   const [stationAdmins, participants] = await Promise.all([
     listAdminUsersByStation(context.env, station.id),
@@ -569,6 +688,22 @@ async function buildStationFailureAdminMessage(context, team, station, stepLabel
     `Команда: ${team.team_name}`,
     `Станция: ${station.station_name}`,
     `Шаг: ${stepLabel}`,
+    `Организаторы станции: ${formatUserLinks(stationAdmins)}`,
+    `Участники команды: ${formatUserLinks(participants)}`,
+  ].join("\n");
+}
+
+async function buildStationReadyFailureAdminMessage(context, team, station) {
+  const [stationAdmins, participants] = await Promise.all([
+    listAdminUsersByStation(context.env, station.id),
+    listParticipantUsersByTeam(context.env, team.id),
+  ]);
+
+  return [
+    "🔴 Станция не началась",
+    `Команда: ${team.team_name}`,
+    `Станция: ${station.station_name}`,
+    "Шаг: Сообщение о готовности станции",
     `Организаторы станции: ${formatUserLinks(stationAdmins)}`,
     `Участники команды: ${formatUserLinks(participants)}`,
   ].join("\n");

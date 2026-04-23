@@ -4,6 +4,7 @@ import {
   createFinishConfirmationKeyboard,
   createIdleStationKeyboard,
   createMyStationBackKeyboard,
+  createPreparingStationKeyboard,
   createStationDeliveryFailedKeyboard,
 } from "./keyboards.js";
 
@@ -23,10 +24,20 @@ export async function sendIdleStationScreen(vk, peerId) {
   });
 }
 
+export async function sendPreparingStationScreen(vk, peerId, teamName, teamId) {
+  await vk.sendText(
+    peerId,
+    `На вашу станцию назначена команда "${teamName}". Подготовьтесь и нажмите "Готов принимать", когда будете готовы принять команду.`,
+    {
+      keyboard: createPreparingStationKeyboard(teamId),
+    },
+  );
+}
+
 export async function sendActiveStationScreen(vk, peerId, teamName, teamId) {
   await vk.sendText(
     peerId,
-    `На вашу станцию назначена команда "${teamName}". Когда команда действительно пройдет станцию, нажмите "Завершить станцию".`,
+    `Команда "${teamName}" уже на станции. Когда команда действительно пройдет станцию, нажмите "Завершить станцию".`,
     {
       keyboard: createActiveStationKeyboard(teamId),
     },

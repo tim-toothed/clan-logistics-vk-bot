@@ -64,10 +64,10 @@ export async function getAvailableTeamsForStation(env, stationId) {
   );
 }
 
-export async function startStationForTeam(env, { stationId, teamId, startedByUserId, startTime }) {
+export async function assignTeamToPreparingStation(env, { stationId, teamId }) {
   await dbBatch(env, [
     {
-      sql: "UPDATE stations SET status = 'occupied', current_team_id = ? WHERE id = ?",
+      sql: "UPDATE stations SET status = 'preparing', current_team_id = ? WHERE id = ?",
       bindings: [teamId, stationId],
     },
     {
@@ -75,10 +75,25 @@ export async function startStationForTeam(env, { stationId, teamId, startedByUse
       bindings: [stationId, teamId],
     },
     {
-      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, ?, NULL, 'active', ?, NULL)",
-      bindings: [stationId, teamId, startTime, startedByUserId],
+      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, NULL, NULL, 'active', NULL, NULL)",
+      bindings: [stationId, teamId],
     },
   ]);
+}
+
+export async function markPreparedStationReady(env, { stationId, teamId, startedByUserId, startTime }) {
+  const [stationResult, eventResult] = await dbBatch(env, [
+    {
+      sql: "UPDATE stations SET status = 'occupied' WHERE id = ? AND status = 'preparing' AND current_team_id = ?",
+      bindings: [stationId, teamId],
+    },
+    {
+      sql: "UPDATE events SET start_time = ?, started_by_user_id = ? WHERE station_id = ? AND team_id = ? AND status = 'active' AND start_time IS NULL",
+      bindings: [startTime, startedByUserId, stationId, teamId],
+    },
+  ]);
+
+  return Number(stationResult?.meta?.changes ?? 0) === 1 && Number(eventResult?.meta?.changes ?? 0) === 1;
 }
 
 export async function claimActiveEventForCompletion(env, { eventId, stationId, claimingUserId }) {
@@ -102,7 +117,7 @@ export async function releaseActiveEventCompletionClaim(env, { eventId, stationI
 export async function claimNextStationForTeam(env, { stationId, teamId }) {
   const result = await dbRun(
     env,
-    "UPDATE stations SET status = 'occupied', current_team_id = ? WHERE id = ? AND status = 'free' AND current_team_id IS NULL",
+    "UPDATE stations SET status = 'preparing', current_team_id = ? WHERE id = ? AND status = 'free' AND current_team_id IS NULL",
     [teamId, stationId],
   );
 
@@ -112,7 +127,7 @@ export async function claimNextStationForTeam(env, { stationId, teamId }) {
 export async function releaseClaimedNextStation(env, { stationId, teamId }) {
   await dbRun(
     env,
-    "UPDATE stations SET status = 'free', current_team_id = NULL WHERE id = ? AND status = 'occupied' AND current_team_id = ?",
+    "UPDATE stations SET status = 'free', current_team_id = NULL WHERE id = ? AND status = 'preparing' AND current_team_id = ?",
     [stationId, teamId],
   );
 }
@@ -142,15 +157,15 @@ export async function claimWaitingTeamAssignment(env, { stationId, teamId }) {
   return { ok: true };
 }
 
-export async function finalizeWaitingTeamAssignment(env, { stationId, teamId, startTime }) {
+export async function finalizeWaitingTeamAssignment(env, { stationId, teamId }) {
   await dbBatch(env, [
     {
       sql: "UPDATE teams SET status = 'on_station', current_station_id = ? WHERE id = ? AND status = 'waiting_station' AND current_station_id = ?",
       bindings: [stationId, teamId, stationId],
     },
     {
-      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, ?, NULL, 'active', NULL, NULL)",
-      bindings: [stationId, teamId, startTime],
+      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, NULL, NULL, 'active', NULL, NULL)",
+      bindings: [stationId, teamId],
     },
   ]);
 }
@@ -166,7 +181,7 @@ export async function releaseWaitingTeamAssignment(env, { stationId, teamId }) {
       bindings: [teamId, stationId],
     },
     {
-      sql: "UPDATE stations SET status = 'free', current_team_id = NULL WHERE id = ? AND status = 'occupied' AND current_team_id = ?",
+      sql: "UPDATE stations SET status = 'free', current_team_id = NULL WHERE id = ? AND status = 'preparing' AND current_team_id = ?",
       bindings: [stationId, teamId],
     },
   ]);
@@ -191,7 +206,7 @@ export async function completeStationForTeam(env, { eventId, stationId, teamId, 
 
 export async function transitionTeamToNextStation(
   env,
-  { eventId, stationId, teamId, nextStationId, endedByUserId, endTime, stationDone, startTime },
+  { eventId, stationId, teamId, nextStationId, endedByUserId, endTime, stationDone },
 ) {
   await dbBatch(env, [
     {
@@ -203,7 +218,7 @@ export async function transitionTeamToNextStation(
       bindings: [stationDone ? "done" : "free", stationId],
     },
     {
-      sql: "UPDATE stations SET status = 'occupied', current_team_id = ? WHERE id = ?",
+      sql: "UPDATE stations SET status = 'preparing', current_team_id = ? WHERE id = ?",
       bindings: [teamId, nextStationId],
     },
     {
@@ -211,8 +226,8 @@ export async function transitionTeamToNextStation(
       bindings: [nextStationId, teamId],
     },
     {
-      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, ?, NULL, 'active', NULL, NULL)",
-      bindings: [nextStationId, teamId, startTime],
+      sql: "INSERT INTO events (station_id, team_id, start_time, end_time, status, started_by_user_id, ended_by_user_id) VALUES (?, ?, NULL, NULL, 'active', NULL, NULL)",
+      bindings: [nextStationId, teamId],
     },
   ]);
 }

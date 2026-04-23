@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS teams (
 CREATE TABLE IF NOT EXISTS stations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   station_name TEXT NOT NULL,
-  not_first INTEGER NOT NULL DEFAULT 0 CHECK (not_first IN (0, 1)),
   status TEXT NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'occupied', 'done')),
   current_team_id INTEGER,
   FOREIGN KEY (current_team_id) REFERENCES teams(id) ON DELETE SET NULL

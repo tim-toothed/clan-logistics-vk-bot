@@ -1,6 +1,7 @@
 import { ACTIONS } from "../../app/action-types.js";
 import { STATE_TYPES } from "../../app/state-types.js";
 import {
+  assignTeamToPreparingStation,
   getStationById,
   getTeamById,
   hasAnyEvents,
@@ -8,13 +9,13 @@ import {
   listFreeStationsForInitialAssignment,
   listTeamsWaitingForInitialAssignment,
   setTeamStatus,
-  startStationForTeam,
 } from "../../db/events-repository.js";
 import { MESSAGE_TRIGGER_TYPES, getMessageByTrigger } from "../../db/messages-repository.js";
 import { getTeams } from "../../db/setup-repository.js";
 import { setUserState } from "../../db/user-state-repository.js";
 import { listMainAdminUsers, listParticipantUsersByTeam } from "../../db/users-repository.js";
 import { deliverParticipantContentWithAdminLog } from "../../utils/participant-delivery.js";
+import { appendStationPreparationNotice } from "../../utils/station-phase.js";
 import { sendAdminMenuScreen } from "../admin-home/screens.js";
 import { sendAssignTeamsConfirmScreen, sendAssignTeamsRetryScreen } from "./screens.js";
 
@@ -128,12 +129,12 @@ export async function startQuest(context, options = {}) {
   const startedTeams = [];
   const waitingTeams = [];
   const failedAssignments = [];
-  const timestamp = new Date().toISOString();
 
   for (let index = 0; index < assignableCount; index += 1) {
     const team = teams[index];
     const station = stations[index];
     const delivery = await buildInitialStationDelivery(context, team, station);
+    delivery.contentItems = appendStationPreparationNotice(delivery.contentItems);
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
     if (!deliveryReport.ok) {
@@ -145,11 +146,9 @@ export async function startQuest(context, options = {}) {
       continue;
     }
 
-    await startStationForTeam(context.env, {
+    await assignTeamToPreparingStation(context.env, {
       stationId: station.id,
       teamId: team.id,
-      startedByUserId: context.user.id,
-      startTime: timestamp,
     });
     startedTeams.push({
       teamId: team.id,
@@ -225,6 +224,11 @@ export async function retryFailedQuestAssignments(context) {
     const delivery = station
       ? await buildInitialStationDelivery(context, team, station)
       : await buildInitialWaitingDelivery(context, team);
+
+    if (station) {
+      delivery.contentItems = appendStationPreparationNotice(delivery.contentItems);
+    }
+
     const deliveryReport = await deliverParticipantContentWithAdminLog(context, delivery);
 
     if (!deliveryReport.ok) {
@@ -239,11 +243,9 @@ export async function retryFailedQuestAssignments(context) {
     }
 
     if (station) {
-      await startStationForTeam(context.env, {
+      await assignTeamToPreparingStation(context.env, {
         stationId: station.id,
         teamId: team.id,
-        startedByUserId: context.user.id,
-        startTime: new Date().toISOString(),
       });
     } else {
       await setTeamStatus(context.env, team.id, "waiting_station");
